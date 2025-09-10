@@ -49,7 +49,7 @@ class MongoDBReportManager:
             mongodb_auth_source = os.getenv("MONGODB_AUTH_SOURCE", "admin")
 
             logger.info(f"🔧 MongoDB配置: host={mongodb_host}, port={mongodb_port}, db={mongodb_database}")
-            logger.info(f"🔧 认证信息: username={mongodb_username}, auth_source={mongodb_auth_source}")
+            logger.info(f"🔧 认证信息: username={mongodb_username},password={mongodb_password}, auth_source={mongodb_auth_source} database={mongodb_database}")
 
             # 构建连接参数
             connect_kwargs = {

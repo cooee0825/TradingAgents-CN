@@ -15,7 +15,16 @@ def check_mongodb_before_after():
     
     # 连接MongoDB
     try:
-        client = MongoClient('mongodb://localhost:27017/')
+        client = MongoClient(
+                    host="localhost",
+                    port=27017,
+                    username="admin",
+                    password="tradingagents123",
+                    authSource="admin",
+                    serverSelectionTimeoutMS=5000
+                )
+        print("✅ MongoClient创建成功")
+        client.admin.command('ping')
         db = client['tradingagents']
         collection = db['analysis_reports']
         

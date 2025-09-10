@@ -159,8 +159,9 @@ class ConfigManager:
         
         try:
             connection_string = os.getenv("MONGODB_CONNECTION_STRING")
+            print(f"MongoDB连接字符串: {connection_string}")
             database_name = os.getenv("MONGODB_DATABASE_NAME", "tradingagents")
-            
+            print(f"MongoDB数据库名称: {database_name}")
             self.mongodb_storage = MongoDBStorage(
                 connection_string=connection_string,
                 database_name=database_name

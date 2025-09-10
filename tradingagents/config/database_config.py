@@ -23,6 +23,7 @@ class DatabaseConfig:
             ValueError: 当必要的配置未设置时
         """
         connection_string = os.getenv('MONGODB_CONNECTION_STRING')
+        print(f"MongoDB连接字符串: {connection_string}")
         if not connection_string:
             raise ValueError(
                 "MongoDB连接字符串未配置。请设置环境变量 MONGODB_CONNECTION_STRING\n"

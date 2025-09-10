@@ -9,6 +9,8 @@ import hashlib
 import os
 from typing import Optional, Dict, Any
 
+# logger = logging.getLogger(__name__)
+
 class RedisSessionManager:
     """基于Redis的会话管理器"""
     
@@ -20,6 +22,8 @@ class RedisSessionManager:
         
     def _init_redis(self) -> bool:
         """初始化Redis连接"""
+        # logger.info(f"✅ Redis连接初始化3333")
+        print(f"✅ Redis连接初始化3333")
         try:
             # 首先检查REDIS_ENABLED环境变量
             redis_enabled = os.getenv('REDIS_ENABLED', 'false').lower()
@@ -34,6 +38,7 @@ class RedisSessionManager:
             redis_password = os.getenv('REDIS_PASSWORD', None)
             redis_db = int(os.getenv('REDIS_DB', 0))
             
+            
             # 创建Redis连接
             self.redis_client = redis.Redis(
                 host=redis_host,
@@ -44,9 +49,11 @@ class RedisSessionManager:
                 socket_timeout=5,
                 socket_connect_timeout=5
             )
+
             
             # 测试连接
             self.redis_client.ping()
+            print(f"✅ Redis连接成功1111: {redis_host}:{redis_port} password={redis_password} db={redis_db}")
             return True
             
         except Exception as e:
