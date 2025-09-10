@@ -238,14 +238,16 @@ def render_login_form():
                 "用户名", 
                 placeholder="请输入您的用户名", 
                 key="username_input",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                value="admin"
             )
             password = st.text_input(
                 "密码", 
                 type="password", 
                 placeholder="请输入您的密码", 
                 key="password_input",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                value="admin123"
             )
             
             st.markdown("<br>", unsafe_allow_html=True)

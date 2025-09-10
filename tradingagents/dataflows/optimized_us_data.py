@@ -89,7 +89,7 @@ class OptimizedUSDataProvider:
 
         # 尝试FINNHUB API（优先）
         try:
-            logger.info(f"🌐 从FINNHUB API获取数据: {symbol}")
+            logger.info(f"🌐 从FINNHUB API获取数据--1: {symbol} start_date: {start_date} end_date: {end_date}")
             self._wait_for_rate_limit()
 
             formatted_data = self._get_data_from_finnhub(symbol, start_date, end_date)
@@ -97,11 +97,11 @@ class OptimizedUSDataProvider:
                 data_source = "finnhub"
                 logger.info(f"✅ FINNHUB数据获取成功: {symbol}")
             else:
-                logger.error(f"⚠️ FINNHUB数据获取失败，尝试备用方案")
+                logger.error(f"⚠️ FINNHUB数据获取失败，尝试备用方案2")
                 formatted_data = None
 
         except Exception as e:
-            logger.error(f"❌ FINNHUB API调用失败: {e}")
+            logger.error(f"❌ FINNHUB API调用失败2: {e} {e.__traceback__}")
             formatted_data = None
 
         # 备用方案：根据股票类型选择合适的数据源
@@ -275,6 +275,7 @@ class OptimizedUSDataProvider:
 
             # 获取API密钥
             api_key = os.getenv('FINNHUB_API_KEY')
+            logger.info(f"api_key: {api_key}")
             if not api_key:
                 return None
 
@@ -282,11 +283,13 @@ class OptimizedUSDataProvider:
 
             # 获取实时报价
             quote = client.quote(symbol.upper())
+            logger.info(f"quote: {quote}")
             if not quote or 'c' not in quote:
                 return None
 
             # 获取公司信息
             profile = client.company_profile2(symbol=symbol.upper())
+            logger.info(f"profile: {profile}")
             company_name = profile.get('name', symbol.upper()) if profile else symbol.upper()
 
             # 格式化数据

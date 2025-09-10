@@ -1,1 +1,9 @@
 cn-0.1.14-preview
+
+## 启动命令
+python3 -m venv tradingagents_env
+source tradingagents_env/bin/activate
+python start_web.py
+
+## 测试命令
+python -m dotenv run python tests/test_finnhub_connection.py
