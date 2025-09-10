@@ -52,39 +52,39 @@ def test_finnhub_api():
         
         # 测试Yahoo Finance数据API
         print(f"\n📊 测试Yahoo Finance数据API...")
-        # try:
-        #     stock_result = toolkit.get_YFin_data_online.invoke({
-        #         'symbol': 'AAPL',
-        #         'start_date': '2025-09-03',
-        #         'end_date': '2025-09-29'
-        #     })
-        #     print(f"✅ Yahoo Finance API调用成功")
-        #     print(f"股票数据长度: {len(stock_result) if stock_result else 0}")
-        #     if stock_result and len(stock_result) > 100:
-        #         print(f"股票数据前200字符:")
-        #         print(stock_result[:200])
-        #     else:
-        #         print(f"股票数据: {stock_result}")
-        # except Exception as e:
-        #     print(f"❌ Yahoo Finance API调用失败: {e}")
+        try:
+            stock_result = toolkit.get_YFin_data_online.invoke({
+                'symbol': 'AAPL',
+                'start_date': '2025-04-03',
+                'end_date': '2025-09-10'
+            })
+            print(f"✅ Yahoo Finance API调用成功")
+            print(f"股票数据长度: {len(stock_result) if stock_result else 0}")
+            if stock_result and len(stock_result) > 100:
+                print(f"股票数据前200字符:")
+                print(stock_result)
+            else:
+                print(f"股票数据: {stock_result}")
+        except Exception as e:
+            print(f"❌ Yahoo Finance API调用失败: {e}")
         
         # 测试OpenAI基本面API
         print(f"\n💼 测试OpenAI基本面API...")
-        try:
-            print(f"OpenAI基本面API调用参数: {toolkit.get_fundamentals_openai}")
-            fundamentals_result = toolkit.get_fundamentals_openai(**{
-                'ticker': 'AAPL',
-                'curr_date': '2025-09-10'
-            })
-            print(f"✅ OpenAI基本面API调用成功")
-            print(f"基本面数据长度: {len(fundamentals_result) if fundamentals_result else 0}")
-            if fundamentals_result and len(fundamentals_result) > 100:
-                print(f"基本面数据前200字符:")
-                print(fundamentals_result)
-            else:
-                print(f"基本面数据: {fundamentals_result}")
-        except Exception as e:
-            print(f"❌ OpenAI基本面API调用失败: {e}")
+        # try:
+        #     print(f"OpenAI基本面API调用参数: {toolkit.get_fundamentals_openai}")
+        #     fundamentals_result = toolkit.get_fundamentals_openai(**{
+        #         'ticker': 'AAPL',
+        #         'curr_date': '2025-09-10'
+        #     })
+        #     print(f"✅ OpenAI基本面API调用成功")
+        #     print(f"基本面数据长度: {len(fundamentals_result) if fundamentals_result else 0}")
+        #     if fundamentals_result and len(fundamentals_result) > 100:
+        #         print(f"基本面数据前200字符:")
+        #         print(fundamentals_result)
+        #     else:
+        #         print(f"基本面数据: {fundamentals_result}")
+        # except Exception as e:
+        #     print(f"❌ OpenAI基本面API调用失败: {e}")
         
         return True
         

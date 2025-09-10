@@ -732,8 +732,68 @@ def get_YFin_data_online(
     if data.index.tz is not None:
         data.index = data.index.tz_localize(None)
 
+    # 计算移动平均线
+    data['MA_5'] = data['Close'].rolling(window=5).mean()
+    data['MA_10'] = data['Close'].rolling(window=10).mean()
+    data['MA_20'] = data['Close'].rolling(window=20).mean()
+    data['MA_50'] = data['Close'].rolling(window=50).mean()
+    data['MA_200'] = data['Close'].rolling(window=200).mean()
+
+    # 计算收益率指标
+    data['Daily_Return'] = data['Close'].pct_change()  # 日收益率
+    data['Cumulative_Return'] = (1 + data['Daily_Return']).cumprod() - 1  # 累计收益率
+
+    # 计算波动率指标
+    data['Volatility_20'] = data['Daily_Return'].rolling(window=20).std() * (252**0.5)  # 年化波动率
+    
+    # 计算价格相对位置
+    data['Price_Range_14'] = ((data['Close'] - data['Low'].rolling(14).min()) / 
+                             (data['High'].rolling(14).max() - data['Low'].rolling(14).min())) * 100
+    
+    # 计算成交量指标
+    data['Volume_MA_20'] = data['Volume'].rolling(window=20).mean()  # 20日平均成交量
+    data['Volume_Ratio'] = data['Volume'] / data['Volume_MA_20']  # 成交量比率
+    
+    # 计算RSI (相对强弱指标)
+    delta = data['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    data['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # 计算MACD指标
+    ema_12 = data['Close'].ewm(span=12).mean()
+    ema_26 = data['Close'].ewm(span=26).mean()
+    data['MACD'] = ema_12 - ema_26
+    data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+    data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
+    
+    # 计算布林带
+    data['BB_Middle'] = data['Close'].rolling(window=20).mean()
+    bb_std = data['Close'].rolling(window=20).std()
+    data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
+    data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
+    data['BB_Width'] = ((data['BB_Upper'] - data['BB_Lower']) / data['BB_Middle']) * 100
+    data['BB_Position'] = ((data['Close'] - data['BB_Lower']) / (data['BB_Upper'] - data['BB_Lower'])) * 100
+    
+    # 计算支撑阻力位相关
+    data['High_20'] = data['High'].rolling(window=20).max()  # 20日最高价
+    data['Low_20'] = data['Low'].rolling(window=20).min()   # 20日最低价
+    
+    # 计算趋势强度
+    data['Trend_Strength'] = ((data['Close'] - data['MA_20']) / data['MA_20']) * 100  # 相对20日均线偏离度
+
     # Round numerical values to 2 decimal places for cleaner display
-    numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
+    numeric_columns = [
+        "Open", "High", "Low", "Close", "Adj Close",
+        "MA_5", "MA_10", "MA_20", "MA_50", "MA_200",
+        "Daily_Return", "Cumulative_Return", "Volatility_20",
+        "Price_Range_14", "Volume_MA_20", "Volume_Ratio",
+        "RSI_14", "MACD", "MACD_Signal", "MACD_Histogram",
+        "BB_Middle", "BB_Upper", "BB_Lower", "BB_Width", "BB_Position",
+        "High_20", "Low_20", "Trend_Strength"
+    ]
+    
     for col in numeric_columns:
         if col in data.columns:
             data[col] = data[col].round(2)
@@ -741,10 +801,24 @@ def get_YFin_data_online(
     # Convert DataFrame to CSV string
     csv_string = data.to_csv()
 
-    # Add header information
+    # Add header information with indicator explanations
     header = f"# Stock data for {symbol.upper()} from {start_date} to {end_date}\n"
     header += f"# Total records: {len(data)}\n"
-    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    header += "# \n"
+    header += "# Technical Indicators Included:\n"
+    header += "# MA_5/10/20/50/200: Moving averages (short to long term trends)\n"
+    header += "# Daily_Return: Daily percentage change\n"
+    header += "# Cumulative_Return: Total return from start date\n"
+    header += "# Volatility_20: 20-day annualized volatility\n"
+    header += "# Price_Range_14: Price position within 14-day range (0-100%)\n"
+    header += "# Volume_Ratio: Current volume vs 20-day average\n"
+    header += "# RSI_14: Relative Strength Index (0-100, >70 overbought, <30 oversold)\n"
+    header += "# MACD: Moving Average Convergence Divergence\n"
+    header += "# BB_Upper/Lower: Bollinger Bands (volatility bands)\n"
+    header += "# BB_Position: Price position within Bollinger Bands (0-100%)\n"
+    header += "# Trend_Strength: Price deviation from 20-day MA (%)\n"
+    header += "# High_20/Low_20: 20-day highest/lowest prices\n\n"
 
     return header + csv_string
 
