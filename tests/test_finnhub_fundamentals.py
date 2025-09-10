@@ -40,6 +40,8 @@ def test_finnhub_fundamentals_with_cache():
         start_time = time.time()
         result1 = get_fundamentals_finnhub(test_ticker, curr_date)
         first_time = time.time() - start_time
+
+        print(f"Finnhub基本面数据: {result1}")
         
         if result1 and len(result1) > 100:
             print(f"✅ {test_ticker} 基本面数据获取成功，长度: {len(result1)}")

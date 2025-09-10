@@ -127,6 +127,7 @@ class FinnhubDataDownloader:
             # 检查文件是否存在且有效
             file_path = news_dir / f"{symbol}_data_formatted.json"
             if file_path.exists() and not force_refresh:
+                print(f"新闻数据 file_path: {file_path}")
                 # 检查文件是否有内容
                 try:
                     file_size = file_path.stat().st_size
@@ -188,6 +189,7 @@ class FinnhubDataDownloader:
             
             # 避免API限制
             time.sleep(1)
+            return news_data
     
     def download_insider_sentiment(self, symbols: List[str], force_refresh: bool = False):
         """

@@ -99,6 +99,7 @@ class Toolkit:
         start_date = datetime.strptime(start_date, "%Y-%m-%d")
         look_back_days = (end_date - start_date).days
 
+        print(f"Finnhub新闻数据3333: {ticker}, {end_date_str}, {look_back_days}")
         finnhub_news_result = interface.get_finnhub_news(
             ticker, end_date_str, look_back_days
         )

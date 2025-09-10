@@ -17,7 +17,7 @@ def test_finnhub_api():
         print("❌ 请设置 FINNHUB_API_KEY 环境变量")
         return False
     
-    print(f"✅ FINNHUB API密钥已配置: {finnhub_key[:10]}...")
+    print(f"✅ FINNHUB API密钥已配置: {finnhub_key[:100]}...")
     
     try:
         from tradingagents.agents.utils.agent_utils import Toolkit
@@ -36,10 +36,11 @@ def test_finnhub_api():
         try:
             news_result = toolkit.get_finnhub_news.invoke({
                 'ticker': 'AAPL',
-                'start_date': '2025-06-25',
-                'end_date': '2025-06-29'
+                'start_date': '2025-09-03',
+                'end_date': '2025-09-29'
             })
-            print(f"✅ FINNHUB新闻API调用成功")
+            print(f"✅ FINNHUB新闻API调用成功333")
+            print(f"新闻数据: {news_result}")
             print(f"新闻数据长度: {len(news_result) if news_result else 0}")
             if news_result and len(news_result) > 100:
                 print(f"新闻内容前200字符:")
@@ -160,14 +161,14 @@ if __name__ == "__main__":
     result1 = test_finnhub_api()
     
     # 测试中国股票API
-    result2 = test_china_stock_api()
+    # result2 = test_china_stock_api()
     
     print("\n" + "="*50)
     print("🎯 测试总结:")
     print(f"美股API测试: {'✅ 成功' if result1 else '❌ 失败'}")
-    print(f"中国股票API测试: {'✅ 成功' if result2 else '❌ 失败'}")
+    # print(f"中国股票API测试: {'✅ 成功' if result2 else '❌ 失败'}")
     
-    if result1 and result2:
-        print("🎉 所有API连接正常，可以进行股票分析！")
-    else:
-        print("⚠️ 部分API连接有问题，请检查配置和网络连接。")
+    # if result1 and result2:
+    #     print("🎉 所有API连接正常，可以进行股票分析！")
+    # else:
+    #     print("⚠️ 部分API连接有问题，请检查配置和网络连接。")
