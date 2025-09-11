@@ -482,24 +482,56 @@ def get_reddit_company_news(
         total=total_iterations,
     )
 
+    # 尝试多个可能的数据源目录
+    possible_categories = [
+        f"company_{ticker.lower()}",  # 新的公司特定目录格式
+        # "company_news",  # 原来的通用目录格式
+    ]
+
+    logger.info(f"🔍 [Reddit公司新闻] 为 {ticker} 尝试以下数据源:")
+    for cat in possible_categories:
+        cat_path = os.path.join(DATA_DIR, "reddit_data", cat)
+        exists = os.path.exists(cat_path)
+        logger.info(f"   - {cat}: {'✅ 存在' if exists else '❌ 不存在'} ({cat_path})")
+
     while curr_date <= start_date:
         curr_date_str = curr_date.strftime("%Y-%m-%d")
-        fetch_result = fetch_top_from_category(
-            "company_news",
-            curr_date_str,
-            max_limit_per_day,
-            ticker,
-            data_path=os.path.join(DATA_DIR, "reddit_data"),
-        )
-        posts.extend(fetch_result)
-        curr_date += relativedelta(days=1)
 
+        # 尝试从各个可能的数据源获取数据
+        daily_posts = []
+        for category in possible_categories:
+            try:
+                fetch_result = fetch_top_from_category(
+                    category,
+                    curr_date_str,
+                    max_limit_per_day,
+                    ticker,
+                    data_path=os.path.join(DATA_DIR, "reddit_data"),
+                )
+                if fetch_result:
+                    daily_posts.extend(fetch_result)
+                    logger.debug(
+                        f"📊 [Reddit公司新闻] 从 {category} 获取到 {len(fetch_result)} 个帖子"
+                    )
+                    break  # 如果从一个数据源成功获取数据，就不需要尝试其他数据源
+            except Exception as e:
+                logger.debug(f"⚠️ [Reddit公司新闻] 从 {category} 获取失败: {e}")
+                continue
+
+        posts.extend(daily_posts)
+        curr_date += relativedelta(days=1)
         pbar.update(1)
 
     pbar.close()
 
     if len(posts) == 0:
-        return ""
+        logger.warning(f"⚠️ [Reddit公司新闻] 未找到 {ticker} 的Reddit数据")
+        logger.warning(
+            f"💡 [Reddit公司新闻] 建议先使用 download_reddit_company_data 工具下载数据"
+        )
+        return f"## {ticker} Reddit新闻\n\n❌ 未找到相关的Reddit数据。\n\n💡 **建议**: 请先使用 `download_reddit_company_data` 工具下载 {ticker} 的Reddit讨论数据。"
+
+    logger.info(f"✅ [Reddit公司新闻] 成功获取 {ticker} 的 {len(posts)} 个Reddit帖子")
 
     news_str = ""
     for post in posts:
@@ -508,7 +540,7 @@ def get_reddit_company_news(
         else:
             news_str += f"### {post['title']}\n\n{post['content']}\n\n"
 
-    return f"##{ticker} News Reddit, from {before} to {curr_date}:\n\n{news_str}"
+    return f"## {ticker} Reddit新闻 (从 {before} 到 {start_date.strftime('%Y-%m-%d')})\n\n{news_str}"
 
 
 def get_stock_stats_indicators_window(

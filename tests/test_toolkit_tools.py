@@ -52,13 +52,31 @@ def test_toolkit_tools():
         print(f"📰 新闻相关方法: {news_methods}")
 
         # 测试具体的Google工具
-        if hasattr(toolkit, "get_google_news"):
-            print("\n✅ get_google_news 方法存在")
+        # if hasattr(toolkit, "get_google_news"):
+        #     print("\n✅ get_google_news 方法存在")
+        #     try:
+        #         # 测试调用
+        #         print("📰 测试Google新闻获取...")
+        #         news = toolkit.get_google_news.invoke(
+        #             {"query": "Apple AAPL", "curr_date": "2025-09-10"}
+        #         )
+        #         print(f"Google新闻: {news}")
+        #         if news and len(news) > 100:
+        #             print(f"✅ Google新闻获取成功 ({len(news)} 字符)")
+        #         else:
+        #             print("⚠️ Google新闻获取成功但内容较少")
+        #     except Exception as e:
+        #         print(f"❌ Google新闻测试失败: {e}")
+        # else:
+        #     print("❌ get_google_news 方法不存在")
+
+        if hasattr(toolkit, "get_reddit_stock_info"):
+            print("\n✅ get_reddit_stock_info 方法存在")
             try:
                 # 测试调用
-                print("📰 测试Google新闻获取...")
-                news = toolkit.get_google_news.invoke(
-                    {"query": "Apple AAPL", "curr_date": "2025-09-10"}
+                print("📰 测试Reddit新闻获取...")
+                news = toolkit.get_reddit_stock_info.invoke(
+                    {"ticker": "AAPL", "curr_date": "2025-09-10"}
                 )
                 print(f"Google新闻: {news}")
                 if news and len(news) > 100:
@@ -66,9 +84,9 @@ def test_toolkit_tools():
                 else:
                     print("⚠️ Google新闻获取成功但内容较少")
             except Exception as e:
-                print(f"❌ Google新闻测试失败: {e}")
+                print(f"❌ get_reddit_news: {e}")
         else:
-            print("❌ get_google_news 方法不存在")
+            print("❌ get_reddit_stock_info 方法不存在")
 
         # 测试Reddit工具
         reddit_tools = [
@@ -78,16 +96,16 @@ def test_toolkit_tools():
             "get_reddit_news",
         ]
 
-        for tool_name in reddit_tools:
-            if hasattr(toolkit, tool_name):
-                print(f"✅ {tool_name} 方法存在")
-            else:
-                print(f"❌ {tool_name} 方法不存在")
+        # for tool_name in reddit_tools:
+        #     if hasattr(toolkit, tool_name):
+        #         print(f"✅ {tool_name} 方法存在")
+        #     else:
+        #         print(f"❌ {tool_name} 方法不存在")
 
-        # 显示所有方法（用于调试）
-        print(f"\n📋 所有可用方法:")
-        for i, method in enumerate(sorted(all_methods), 1):
-            print(f"  {i:2d}. {method}")
+        # # 显示所有方法（用于调试）
+        # print(f"\n📋 所有可用方法:")
+        # for i, method in enumerate(sorted(all_methods), 1):
+        #     print(f"  {i:2d}. {method}")
 
         return True
 
