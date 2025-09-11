@@ -11,12 +11,14 @@ from tradingagents.utils.logging_init import setup_dataflow_logging
 
 # 导入日志模块
 from tradingagents.utils.logging_manager import get_logger
-logger = get_logger('agents')
+
+logger = get_logger("agents")
 logger = setup_dataflow_logging()
 
 # 导入港股工具
 try:
     from .hk_stock_utils import get_hk_stock_data, get_hk_stock_info
+
     HK_STOCK_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ 港股工具不可用: {e}")
@@ -25,6 +27,7 @@ except ImportError as e:
 # 导入AKShare港股工具
 try:
     from .akshare_utils import get_hk_stock_data_akshare, get_hk_stock_info_akshare
+
     AKSHARE_HK_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ AKShare港股工具不可用: {e}")
@@ -33,6 +36,7 @@ except ImportError as e:
 # 尝试导入yfinance相关模块，如果失败则跳过
 try:
     from .yfin_utils import *
+
     YFIN_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ yfinance工具不可用: {e}")
@@ -40,6 +44,7 @@ except ImportError as e:
 
 try:
     from .stockstats_utils import *
+
     STOCKSTATS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ stockstats工具不可用: {e}")
@@ -56,6 +61,7 @@ from openai import OpenAI
 # 尝试导入yfinance，如果失败则设置为None
 try:
     import yfinance as yf
+
     YF_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"⚠️ yfinance库不可用: {e}")
@@ -344,33 +350,40 @@ def get_google_news(
 ) -> str:
     # 判断是否为A股查询
     is_china_stock = False
-    if any(code in query for code in ['SH', 'SZ', 'XSHE', 'XSHG']) or query.isdigit() or (len(query) == 6 and query[:6].isdigit()):
+    if (
+        any(code in query for code in ["SH", "SZ", "XSHE", "XSHG"])
+        or query.isdigit()
+        or (len(query) == 6 and query[:6].isdigit())
+    ):
         is_china_stock = True
-    
+
     # 尝试使用StockUtils判断
     try:
         from tradingagents.utils.stock_utils import StockUtils
+
         market_info = StockUtils.get_market_info(query.split()[0])
-        if market_info['is_china']:
+        if market_info["is_china"]:
             is_china_stock = True
     except Exception:
         # 如果StockUtils判断失败，使用上面的简单判断
         pass
-    
+
     # 对A股查询添加中文关键词
     if is_china_stock:
         logger.info(f"[Google新闻] 检测到A股查询: {query}，使用中文搜索")
-        if '股票' not in query and '股价' not in query and '公司' not in query:
+        if "股票" not in query and "股价" not in query and "公司" not in query:
             query = f"{query} 股票 公司 财报 新闻"
-    
+
     query = query.replace(" ", "+")
 
     start_date = datetime.strptime(curr_date, "%Y-%m-%d")
     before = start_date - relativedelta(days=look_back_days)
     before = before.strftime("%Y-%m-%d")
 
-    logger.info(f"[Google新闻] 开始获取新闻，查询: {query}, 时间范围: {before} 至 {curr_date}")
-    news_results = getNewsData(query, before, curr_date)
+    logger.info(
+        f"[Google新闻] 开始获取新闻，查询: {query}, 时间范围: {before} 至 {curr_date}"
+    )
+    news_results = getNewsDataConcurrent(query, before, curr_date)
 
     news_str = ""
 
@@ -507,7 +520,6 @@ def get_stock_stats_indicators_window(
     look_back_days: Annotated[int, "how many days to look back"],
     online: Annotated[bool, "to fetch data online or offline"],
 ) -> str:
-
     best_ind_params = {
         # Moving Averages
         "close_50_sma": (
@@ -642,7 +654,6 @@ def get_stockstats_indicator(
     ],
     online: Annotated[bool, "to fetch data online or offline"],
 ) -> str:
-
     curr_date = datetime.strptime(curr_date, "%Y-%m-%d")
     curr_date = curr_date.strftime("%Y-%m-%d")
 
@@ -733,67 +744,96 @@ def get_YFin_data_online(
         data.index = data.index.tz_localize(None)
 
     # 计算移动平均线
-    data['MA_5'] = data['Close'].rolling(window=5).mean()
-    data['MA_10'] = data['Close'].rolling(window=10).mean()
-    data['MA_20'] = data['Close'].rolling(window=20).mean()
-    data['MA_50'] = data['Close'].rolling(window=50).mean()
-    data['MA_200'] = data['Close'].rolling(window=200).mean()
+    data["MA_5"] = data["Close"].rolling(window=5).mean()
+    data["MA_10"] = data["Close"].rolling(window=10).mean()
+    data["MA_20"] = data["Close"].rolling(window=20).mean()
+    data["MA_50"] = data["Close"].rolling(window=50).mean()
+    data["MA_200"] = data["Close"].rolling(window=200).mean()
 
     # 计算收益率指标
-    data['Daily_Return'] = data['Close'].pct_change()  # 日收益率
-    data['Cumulative_Return'] = (1 + data['Daily_Return']).cumprod() - 1  # 累计收益率
+    data["Daily_Return"] = data["Close"].pct_change()  # 日收益率
+    data["Cumulative_Return"] = (1 + data["Daily_Return"]).cumprod() - 1  # 累计收益率
 
     # 计算波动率指标
-    data['Volatility_20'] = data['Daily_Return'].rolling(window=20).std() * (252**0.5)  # 年化波动率
-    
+    data["Volatility_20"] = data["Daily_Return"].rolling(window=20).std() * (
+        252**0.5
+    )  # 年化波动率
+
     # 计算价格相对位置
-    data['Price_Range_14'] = ((data['Close'] - data['Low'].rolling(14).min()) / 
-                             (data['High'].rolling(14).max() - data['Low'].rolling(14).min())) * 100
-    
+    data["Price_Range_14"] = (
+        (data["Close"] - data["Low"].rolling(14).min())
+        / (data["High"].rolling(14).max() - data["Low"].rolling(14).min())
+    ) * 100
+
     # 计算成交量指标
-    data['Volume_MA_20'] = data['Volume'].rolling(window=20).mean()  # 20日平均成交量
-    data['Volume_Ratio'] = data['Volume'] / data['Volume_MA_20']  # 成交量比率
-    
+    data["Volume_MA_20"] = data["Volume"].rolling(window=20).mean()  # 20日平均成交量
+    data["Volume_Ratio"] = data["Volume"] / data["Volume_MA_20"]  # 成交量比率
+
     # 计算RSI (相对强弱指标)
-    delta = data['Close'].diff()
+    delta = data["Close"].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
-    data['RSI_14'] = 100 - (100 / (1 + rs))
-    
+    data["RSI_14"] = 100 - (100 / (1 + rs))
+
     # 计算MACD指标
-    ema_12 = data['Close'].ewm(span=12).mean()
-    ema_26 = data['Close'].ewm(span=26).mean()
-    data['MACD'] = ema_12 - ema_26
-    data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
-    data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
-    
+    ema_12 = data["Close"].ewm(span=12).mean()
+    ema_26 = data["Close"].ewm(span=26).mean()
+    data["MACD"] = ema_12 - ema_26
+    data["MACD_Signal"] = data["MACD"].ewm(span=9).mean()
+    data["MACD_Histogram"] = data["MACD"] - data["MACD_Signal"]
+
     # 计算布林带
-    data['BB_Middle'] = data['Close'].rolling(window=20).mean()
-    bb_std = data['Close'].rolling(window=20).std()
-    data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
-    data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
-    data['BB_Width'] = ((data['BB_Upper'] - data['BB_Lower']) / data['BB_Middle']) * 100
-    data['BB_Position'] = ((data['Close'] - data['BB_Lower']) / (data['BB_Upper'] - data['BB_Lower'])) * 100
-    
+    data["BB_Middle"] = data["Close"].rolling(window=20).mean()
+    bb_std = data["Close"].rolling(window=20).std()
+    data["BB_Upper"] = data["BB_Middle"] + (bb_std * 2)
+    data["BB_Lower"] = data["BB_Middle"] - (bb_std * 2)
+    data["BB_Width"] = ((data["BB_Upper"] - data["BB_Lower"]) / data["BB_Middle"]) * 100
+    data["BB_Position"] = (
+        (data["Close"] - data["BB_Lower"]) / (data["BB_Upper"] - data["BB_Lower"])
+    ) * 100
+
     # 计算支撑阻力位相关
-    data['High_20'] = data['High'].rolling(window=20).max()  # 20日最高价
-    data['Low_20'] = data['Low'].rolling(window=20).min()   # 20日最低价
-    
+    data["High_20"] = data["High"].rolling(window=20).max()  # 20日最高价
+    data["Low_20"] = data["Low"].rolling(window=20).min()  # 20日最低价
+
     # 计算趋势强度
-    data['Trend_Strength'] = ((data['Close'] - data['MA_20']) / data['MA_20']) * 100  # 相对20日均线偏离度
+    data["Trend_Strength"] = (
+        (data["Close"] - data["MA_20"]) / data["MA_20"]
+    ) * 100  # 相对20日均线偏离度
 
     # Round numerical values to 2 decimal places for cleaner display
     numeric_columns = [
-        "Open", "High", "Low", "Close", "Adj Close",
-        "MA_5", "MA_10", "MA_20", "MA_50", "MA_200",
-        "Daily_Return", "Cumulative_Return", "Volatility_20",
-        "Price_Range_14", "Volume_MA_20", "Volume_Ratio",
-        "RSI_14", "MACD", "MACD_Signal", "MACD_Histogram",
-        "BB_Middle", "BB_Upper", "BB_Lower", "BB_Width", "BB_Position",
-        "High_20", "Low_20", "Trend_Strength"
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Adj Close",
+        "MA_5",
+        "MA_10",
+        "MA_20",
+        "MA_50",
+        "MA_200",
+        "Daily_Return",
+        "Cumulative_Return",
+        "Volatility_20",
+        "Price_Range_14",
+        "Volume_MA_20",
+        "Volume_Ratio",
+        "RSI_14",
+        "MACD",
+        "MACD_Signal",
+        "MACD_Histogram",
+        "BB_Middle",
+        "BB_Upper",
+        "BB_Lower",
+        "BB_Width",
+        "BB_Position",
+        "High_20",
+        "Low_20",
+        "Trend_Strength",
     ]
-    
+
     for col in numeric_columns:
         if col in data.columns:
             data[col] = data[col].round(2)
@@ -813,7 +853,9 @@ def get_YFin_data_online(
     header += "# Volatility_20: 20-day annualized volatility\n"
     header += "# Price_Range_14: Price position within 14-day range (0-100%)\n"
     header += "# Volume_Ratio: Current volume vs 20-day average\n"
-    header += "# RSI_14: Relative Strength Index (0-100, >70 overbought, <30 oversold)\n"
+    header += (
+        "# RSI_14: Relative Strength Index (0-100, >70 overbought, <30 oversold)\n"
+    )
     header += "# MACD: Moving Average Convergence Divergence\n"
     header += "# BB_Upper/Lower: Bollinger Bands (volatility bands)\n"
     header += "# BB_Position: Price position within Bollinger Bands (0-100%)\n"
@@ -941,7 +983,7 @@ def get_fundamentals_finnhub(ticker, curr_date):
         import finnhub
         import os
         from .cache_manager import get_cache
-        
+
         # 检查缓存
         cache = get_cache()
         cached_key = cache.find_cached_fundamentals_data(ticker, data_source="finnhub")
@@ -950,43 +992,43 @@ def get_fundamentals_finnhub(ticker, curr_date):
             if cached_data:
                 logger.debug(f"💾 [DEBUG] 从缓存加载Finnhub基本面数据: {ticker}")
                 return cached_data
-        
+
         # 获取Finnhub API密钥
-        api_key = os.getenv('FINNHUB_API_KEY')
+        api_key = os.getenv("FINNHUB_API_KEY")
         if not api_key:
             return "错误：未配置FINNHUB_API_KEY环境变量"
-        
+
         # 初始化Finnhub客户端
         finnhub_client = finnhub.Client(api_key=api_key)
-        
+
         logger.debug(f"📊 [DEBUG] 使用Finnhub API获取 {ticker} 的基本面数据...")
-        
+
         # 获取基本财务数据
         try:
-            basic_financials = finnhub_client.company_basic_financials(ticker, 'all')
+            basic_financials = finnhub_client.company_basic_financials(ticker, "all")
         except Exception as e:
             logger.error(f"❌ [DEBUG] Finnhub基本财务数据获取失败: {str(e)}")
             basic_financials = None
-        
+
         # 获取公司概况
         try:
             company_profile = finnhub_client.company_profile2(symbol=ticker)
         except Exception as e:
             logger.error(f"❌ [DEBUG] Finnhub公司概况获取失败: {str(e)}")
             company_profile = None
-        
+
         # 获取收益数据
         try:
             earnings = finnhub_client.company_earnings(ticker, limit=4)
         except Exception as e:
             logger.error(f"❌ [DEBUG] Finnhub收益数据获取失败: {str(e)}")
             earnings = None
-        
+
         # 格式化报告
         report = f"# {ticker} 基本面分析报告（Finnhub数据源）\n\n"
         report += f"**数据获取时间**: {curr_date}\n"
         report += f"**数据来源**: Finnhub API\n\n"
-        
+
         # 公司概况部分
         if company_profile:
             report += "## 公司概况\n"
@@ -996,71 +1038,73 @@ def get_fundamentals_finnhub(ticker, curr_date):
             report += f"- **货币**: {company_profile.get('currency', 'N/A')}\n"
             report += f"- **市值**: {company_profile.get('marketCapitalization', 'N/A')} 百万美元\n"
             report += f"- **流通股数**: {company_profile.get('shareOutstanding', 'N/A')} 百万股\n\n"
-        
+
         # 基本财务指标
-        if basic_financials and 'metric' in basic_financials:
-            metrics = basic_financials['metric']
+        if basic_financials and "metric" in basic_financials:
+            metrics = basic_financials["metric"]
             report += "## 关键财务指标\n"
             report += "| 指标 | 数值 |\n"
             report += "|------|------|\n"
-            
+
             # 估值指标
-            if 'peBasicExclExtraTTM' in metrics:
+            if "peBasicExclExtraTTM" in metrics:
                 report += f"| 市盈率 (PE) | {metrics['peBasicExclExtraTTM']:.2f} |\n"
-            if 'psAnnual' in metrics:
+            if "psAnnual" in metrics:
                 report += f"| 市销率 (PS) | {metrics['psAnnual']:.2f} |\n"
-            if 'pbAnnual' in metrics:
+            if "pbAnnual" in metrics:
                 report += f"| 市净率 (PB) | {metrics['pbAnnual']:.2f} |\n"
-            
+
             # 盈利能力指标
-            if 'roeTTM' in metrics:
+            if "roeTTM" in metrics:
                 report += f"| 净资产收益率 (ROE) | {metrics['roeTTM']:.2f}% |\n"
-            if 'roaTTM' in metrics:
+            if "roaTTM" in metrics:
                 report += f"| 总资产收益率 (ROA) | {metrics['roaTTM']:.2f}% |\n"
-            if 'netProfitMarginTTM' in metrics:
+            if "netProfitMarginTTM" in metrics:
                 report += f"| 净利润率 | {metrics['netProfitMarginTTM']:.2f}% |\n"
-            
+
             # 财务健康指标
-            if 'currentRatioAnnual' in metrics:
+            if "currentRatioAnnual" in metrics:
                 report += f"| 流动比率 | {metrics['currentRatioAnnual']:.2f} |\n"
-            if 'totalDebt/totalEquityAnnual' in metrics:
-                report += f"| 负债权益比 | {metrics['totalDebt/totalEquityAnnual']:.2f} |\n"
-            
+            if "totalDebt/totalEquityAnnual" in metrics:
+                report += (
+                    f"| 负债权益比 | {metrics['totalDebt/totalEquityAnnual']:.2f} |\n"
+                )
+
             report += "\n"
-        
+
         # 收益历史
         if earnings:
             report += "## 收益历史\n"
             report += "| 季度 | 实际EPS | 预期EPS | 差异 |\n"
             report += "|------|---------|---------|------|\n"
             for earning in earnings[:4]:  # 显示最近4个季度
-                actual = earning.get('actual', 'N/A')
-                estimate = earning.get('estimate', 'N/A')
-                period = earning.get('period', 'N/A')
-                surprise = earning.get('surprise', 'N/A')
+                actual = earning.get("actual", "N/A")
+                estimate = earning.get("estimate", "N/A")
+                period = earning.get("period", "N/A")
+                surprise = earning.get("surprise", "N/A")
                 report += f"| {period} | {actual} | {estimate} | {surprise} |\n"
             report += "\n"
-        
+
         # 数据可用性说明
         report += "## 数据说明\n"
         report += "- 本报告使用Finnhub API提供的官方财务数据\n"
         report += "- 数据来源于公司财报和SEC文件\n"
         report += "- TTM表示过去12个月数据\n"
         report += "- Annual表示年度数据\n\n"
-        
+
         if not basic_financials and not company_profile and not earnings:
             report += "⚠️ **警告**: 无法获取该股票的基本面数据，可能原因：\n"
             report += "- 股票代码不正确\n"
             report += "- Finnhub API限制\n"
             report += "- 该股票暂无基本面数据\n"
-        
+
         # 保存到缓存
         if report and len(report) > 100:  # 只有当报告有实际内容时才缓存
             cache.save_fundamentals_data(ticker, report, data_source="finnhub")
-        
+
         logger.debug(f"📊 [DEBUG] Finnhub基本面数据获取完成，报告长度: {len(report)}")
         return report
-        
+
     except ImportError:
         return "错误：未安装finnhub-python库，请运行: pip install finnhub-python"
     except Exception as e:
@@ -1080,7 +1124,7 @@ def get_fundamentals_openai(ticker, curr_date):
     """
     try:
         from .cache_manager import get_cache
-        
+
         # 检查缓存 - 优先检查OpenAI缓存
         cache = get_cache()
         cached_key = cache.find_cached_fundamentals_data(ticker, data_source="openai")
@@ -1089,13 +1133,15 @@ def get_fundamentals_openai(ticker, curr_date):
             if cached_data:
                 logger.debug(f"💾 [DEBUG] 从缓存加载OpenAI基本面数据: {ticker}")
                 return cached_data
-        
+
         config = get_config()
 
         # 检查是否配置了OpenAI API Key（这是最关键的检查）
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            logger.debug(f"📊 [DEBUG] 未配置OPENAI_API_KEY，跳过OpenAI API，直接使用Finnhub")
+            logger.debug(
+                f"📊 [DEBUG] 未配置OPENAI_API_KEY，跳过OpenAI API，直接使用Finnhub"
+            )
             return get_fundamentals_finnhub(ticker, curr_date)
 
         # 检查是否配置了OpenAI相关设置
@@ -1106,11 +1152,13 @@ def get_fundamentals_openai(ticker, curr_date):
         # 检查backend_url是否是OpenAI的URL
         backend_url = config.get("backend_url", "")
         if "openai.com" not in backend_url:
-            logger.debug(f"📊 [DEBUG] backend_url不是OpenAI API ({backend_url})，跳过OpenAI，使用Finnhub")
+            logger.debug(
+                f"📊 [DEBUG] backend_url不是OpenAI API ({backend_url})，跳过OpenAI，使用Finnhub"
+            )
             return get_fundamentals_finnhub(ticker, curr_date)
-        
+
         logger.debug(f"📊 [DEBUG] 尝试使用OpenAI获取 {ticker} 的基本面数据...")
-        
+
         client = OpenAI(base_url=config["backend_url"])
 
         response = client.responses.create(
@@ -1142,14 +1190,14 @@ def get_fundamentals_openai(ticker, curr_date):
         )
 
         result = response.output[1].content[0].text
-        
+
         # 保存到缓存
         if result and len(result) > 100:  # 只有当结果有实际内容时才缓存
             cache.save_fundamentals_data(ticker, result, data_source="openai")
-        
+
         logger.debug(f"📊 [DEBUG] OpenAI基本面数据获取成功，长度: {len(result)}")
         return result
-        
+
     except Exception as e:
         logger.error(f"❌ [DEBUG] OpenAI基本面数据获取失败: {str(e)}")
         logger.debug(f"📊 [DEBUG] 回退到Finnhub API...")
@@ -1158,10 +1206,11 @@ def get_fundamentals_openai(ticker, curr_date):
 
 # ==================== Tushare数据接口 ====================
 
+
 def get_china_stock_data_tushare(
     ticker: Annotated[str, "中国股票代码，如：000001、600036等"],
     start_date: Annotated[str, "开始日期，格式：YYYY-MM-DD"],
-    end_date: Annotated[str, "结束日期，格式：YYYY-MM-DD"]
+    end_date: Annotated[str, "结束日期，格式：YYYY-MM-DD"],
 ) -> str:
     """
     使用Tushare获取中国A股历史数据
@@ -1181,7 +1230,9 @@ def get_china_stock_data_tushare(
         logger.debug(f"📊 [Tushare] 获取{ticker}股票数据...")
 
         # 添加详细的股票代码追踪日志
-        logger.info(f"🔍 [股票代码追踪] get_china_stock_data_tushare 接收到的股票代码: '{ticker}' (类型: {type(ticker)})")
+        logger.info(
+            f"🔍 [股票代码追踪] get_china_stock_data_tushare 接收到的股票代码: '{ticker}' (类型: {type(ticker)})"
+        )
         logger.info(f"🔍 [股票代码追踪] 重定向到data_source_manager")
 
         manager = get_data_source_manager()
@@ -1193,7 +1244,7 @@ def get_china_stock_data_tushare(
 
 
 def search_china_stocks_tushare(
-    keyword: Annotated[str, "搜索关键词，可以是股票名称或代码"]
+    keyword: Annotated[str, "搜索关键词，可以是股票名称或代码"],
 ) -> str:
     """
     使用Tushare搜索中国A股股票
@@ -1220,7 +1271,7 @@ def search_china_stocks_tushare(
 
 
 def get_china_stock_fundamentals_tushare(
-    ticker: Annotated[str, "中国股票代码，如：000001、600036等"]
+    ticker: Annotated[str, "中国股票代码，如：000001、600036等"],
 ) -> str:
     """
     使用Tushare获取中国A股基本面数据
@@ -1247,7 +1298,7 @@ def get_china_stock_fundamentals_tushare(
 
 
 def get_china_stock_info_tushare(
-    ticker: Annotated[str, "中国股票代码，如：000001、600036等"]
+    ticker: Annotated[str, "中国股票代码，如：000001、600036等"],
 ) -> str:
     """
     使用Tushare获取中国A股基本信息
@@ -1275,10 +1326,11 @@ def get_china_stock_info_tushare(
 
 # ==================== 统一数据源接口 ====================
 
+
 def get_china_stock_data_unified(
     ticker: Annotated[str, "中国股票代码，如：000001、600036等"],
     start_date: Annotated[str, "开始日期，格式：YYYY-MM-DD"],
-    end_date: Annotated[str, "结束日期，格式：YYYY-MM-DD"]
+    end_date: Annotated[str, "结束日期，格式：YYYY-MM-DD"],
 ) -> str:
     """
     统一的中国A股数据获取接口
@@ -1293,17 +1345,21 @@ def get_china_stock_data_unified(
         str: 格式化的股票数据报告
     """
     # 记录详细的输入参数
-    logger.info(f"📊 [统一接口] 开始获取中国股票数据",
-               extra={
-                   'function': 'get_china_stock_data_unified',
-                   'ticker': ticker,
-                   'start_date': start_date,
-                   'end_date': end_date,
-                   'event_type': 'unified_data_call_start'
-               })
+    logger.info(
+        f"📊 [统一接口] 开始获取中国股票数据",
+        extra={
+            "function": "get_china_stock_data_unified",
+            "ticker": ticker,
+            "start_date": start_date,
+            "end_date": end_date,
+            "event_type": "unified_data_call_start",
+        },
+    )
 
     # 添加详细的股票代码追踪日志
-    logger.info(f"🔍 [股票代码追踪] get_china_stock_data_unified 接收到的原始股票代码: '{ticker}' (类型: {type(ticker)})")
+    logger.info(
+        f"🔍 [股票代码追踪] get_china_stock_data_unified 接收到的原始股票代码: '{ticker}' (类型: {type(ticker)})"
+    )
     logger.info(f"🔍 [股票代码追踪] 股票代码长度: {len(str(ticker))}")
     logger.info(f"🔍 [股票代码追踪] 股票代码字符: {list(str(ticker))}")
 
@@ -1320,49 +1376,60 @@ def get_china_stock_data_unified(
         is_success = result and "❌" not in result and "错误" not in result
 
         if is_success:
-            logger.info(f"✅ [统一接口] 中国股票数据获取成功",
-                       extra={
-                           'function': 'get_china_stock_data_unified',
-                           'ticker': ticker,
-                           'start_date': start_date,
-                           'end_date': end_date,
-                           'duration': duration,
-                           'result_length': result_length,
-                           'result_preview': result[:300] + '...' if result_length > 300 else result,
-                           'event_type': 'unified_data_call_success'
-                       })
+            logger.info(
+                f"✅ [统一接口] 中国股票数据获取成功",
+                extra={
+                    "function": "get_china_stock_data_unified",
+                    "ticker": ticker,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "duration": duration,
+                    "result_length": result_length,
+                    "result_preview": result[:300] + "..."
+                    if result_length > 300
+                    else result,
+                    "event_type": "unified_data_call_success",
+                },
+            )
         else:
-            logger.warning(f"⚠️ [统一接口] 中国股票数据质量异常",
-                          extra={
-                              'function': 'get_china_stock_data_unified',
-                              'ticker': ticker,
-                              'start_date': start_date,
-                              'end_date': end_date,
-                              'duration': duration,
-                              'result_length': result_length,
-                              'result_preview': result[:300] + '...' if result_length > 300 else result,
-                              'event_type': 'unified_data_call_warning'
-                          })
+            logger.warning(
+                f"⚠️ [统一接口] 中国股票数据质量异常",
+                extra={
+                    "function": "get_china_stock_data_unified",
+                    "ticker": ticker,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "duration": duration,
+                    "result_length": result_length,
+                    "result_preview": result[:300] + "..."
+                    if result_length > 300
+                    else result,
+                    "event_type": "unified_data_call_warning",
+                },
+            )
 
         return result
 
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"❌ [统一接口] 获取股票数据失败: {e}",
-                    extra={
-                        'function': 'get_china_stock_data_unified',
-                        'ticker': ticker,
-                        'start_date': start_date,
-                        'end_date': end_date,
-                        'duration': duration,
-                        'error': str(e),
-                        'event_type': 'unified_data_call_error'
-                    }, exc_info=True)
+        logger.error(
+            f"❌ [统一接口] 获取股票数据失败: {e}",
+            extra={
+                "function": "get_china_stock_data_unified",
+                "ticker": ticker,
+                "start_date": start_date,
+                "end_date": end_date,
+                "duration": duration,
+                "error": str(e),
+                "event_type": "unified_data_call_error",
+            },
+            exc_info=True,
+        )
         return f"❌ 获取{ticker}股票数据失败: {e}"
 
 
 def get_china_stock_info_unified(
-    ticker: Annotated[str, "中国股票代码，如：000001、600036等"]
+    ticker: Annotated[str, "中国股票代码，如：000001、600036等"],
 ) -> str:
     """
     统一的中国A股基本信息获取接口
@@ -1381,7 +1448,7 @@ def get_china_stock_info_unified(
 
         info = get_china_stock_info_unified(ticker)
 
-        if info and info.get('name'):
+        if info and info.get("name"):
             result = f"股票代码: {ticker}\n"
             result += f"股票名称: {info.get('name', '未知')}\n"
             result += f"所属地区: {info.get('area', '未知')}\n"
@@ -1400,7 +1467,7 @@ def get_china_stock_info_unified(
 
 
 def switch_china_data_source(
-    source: Annotated[str, "数据源名称：tushare, akshare, baostock"]
+    source: Annotated[str, "数据源名称：tushare, akshare, baostock"],
 ) -> str:
     """
     切换中国股票数据源
@@ -1416,10 +1483,10 @@ def switch_china_data_source(
 
         # 映射字符串到枚举
         source_mapping = {
-            'tushare': ChinaDataSource.TUSHARE,
-            'akshare': ChinaDataSource.AKSHARE,
-            'baostock': ChinaDataSource.BAOSTOCK,
-            'tdx': ChinaDataSource.TDX
+            "tushare": ChinaDataSource.TUSHARE,
+            "akshare": ChinaDataSource.AKSHARE,
+            "baostock": ChinaDataSource.BAOSTOCK,
+            "tdx": ChinaDataSource.TDX,
         }
 
         if source.lower() not in source_mapping:
@@ -1465,7 +1532,10 @@ def get_current_china_data_source() -> str:
 
 # ==================== 港股数据接口 ====================
 
-def get_hk_stock_data_unified(symbol: str, start_date: str = None, end_date: str = None) -> str:
+
+def get_hk_stock_data_unified(
+    symbol: str, start_date: str = None, end_date: str = None
+) -> str:
     """
     获取港股数据的统一接口
 
@@ -1509,6 +1579,7 @@ def get_hk_stock_data_unified(symbol: str, start_date: str = None, end_date: str
         # 备用方案2：使用FINNHUB（付费用户可用）
         try:
             from .optimized_us_data import get_us_stock_data_cached
+
             logger.info(f"🔄 使用FINNHUB获取港股数据: {symbol}")
             result = get_us_stock_data_cached(symbol, start_date, end_date)
             if result and "❌" not in result:
@@ -1542,8 +1613,14 @@ def get_hk_stock_info_unified(symbol: str) -> Dict:
             try:
                 logger.info(f"🔄 优先使用AKShare获取港股信息: {symbol}")
                 result = get_hk_stock_info_akshare(symbol)
-                if result and 'error' not in result and not result.get('name', '').startswith('港股'):
-                    logger.info(f"✅ AKShare成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}")
+                if (
+                    result
+                    and "error" not in result
+                    and not result.get("name", "").startswith("港股")
+                ):
+                    logger.info(
+                        f"✅ AKShare成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}"
+                    )
                     return result
                 else:
                     logger.warning(f"⚠️ AKShare返回默认信息，尝试备用方案")
@@ -1555,8 +1632,14 @@ def get_hk_stock_info_unified(symbol: str) -> Dict:
             try:
                 logger.info(f"🔄 使用Yahoo Finance备用方案获取港股信息: {symbol}")
                 result = get_hk_stock_info(symbol)
-                if result and 'error' not in result and not result.get('name', '').startswith('港股'):
-                    logger.info(f"✅ Yahoo Finance成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}")
+                if (
+                    result
+                    and "error" not in result
+                    and not result.get("name", "").startswith("港股")
+                ):
+                    logger.info(
+                        f"✅ Yahoo Finance成功获取港股信息: {symbol} -> {result.get('name', 'N/A')}"
+                    )
                     return result
                 else:
                     logger.warning(f"⚠️ Yahoo Finance返回默认信息")
@@ -1566,26 +1649,28 @@ def get_hk_stock_info_unified(symbol: str) -> Dict:
         # 备用方案2：返回基本信息
         logger.info(f"🔄 使用默认信息: {symbol}")
         return {
-            'symbol': symbol,
-            'name': f'港股{symbol}',
-            'currency': 'HKD',
-            'exchange': 'HKG',
-            'source': 'fallback'
+            "symbol": symbol,
+            "name": f"港股{symbol}",
+            "currency": "HKD",
+            "exchange": "HKG",
+            "source": "fallback",
         }
 
     except Exception as e:
         logger.error(f"❌ 获取港股信息失败: {e}")
         return {
-            'symbol': symbol,
-            'name': f'港股{symbol}',
-            'currency': 'HKD',
-            'exchange': 'HKG',
-            'source': 'error',
-            'error': str(e)
+            "symbol": symbol,
+            "name": f"港股{symbol}",
+            "currency": "HKD",
+            "exchange": "HKG",
+            "source": "error",
+            "error": str(e),
         }
 
 
-def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str = None) -> str:
+def get_stock_data_by_market(
+    symbol: str, start_date: str = None, end_date: str = None
+) -> str:
     """
     根据股票市场类型自动选择数据源获取数据
 
@@ -1602,10 +1687,10 @@ def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str 
 
         market_info = StockUtils.get_market_info(symbol)
 
-        if market_info['is_china']:
+        if market_info["is_china"]:
             # 中国A股
             return get_china_stock_data_unified(symbol, start_date, end_date)
-        elif market_info['is_hk']:
+        elif market_info["is_hk"]:
             # 港股
             return get_hk_stock_data_unified(symbol, start_date, end_date)
         else:
