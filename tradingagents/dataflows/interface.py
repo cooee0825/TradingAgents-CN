@@ -967,39 +967,112 @@ def get_stock_news_openai(ticker, curr_date):
     return response.output[1].content[0].text
 
 
-def get_global_news_openai(curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
+def get_global_news_openai(ticker, curr_date):
+    """
+    使用 Google Gemini Pro 获取特定股票的新闻信息和分析
+    基于模型知识对特定公司进行深度分析
 
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
+    Args:
+        ticker (str): 股票代码，如 'AAPL', 'TSLA', '000001'
+        curr_date (str): 当前日期，格式为 'YYYY-MM-DD'
 
-    return response.output[1].content[0].text
+    Returns:
+        str: 股票新闻分析报告
+    """
+    try:
+        from ..llm_adapters.google_openai_adapter import create_google_openai_llm
+        from langchain_core.messages import HumanMessage
+
+        # 检查是否配置了Google API Key
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("未找到GOOGLE_API_KEY环境变量，请配置后重试")
+
+        print(f"使用 Google Gemini 获取 {ticker} 股票新闻，日期: {curr_date}")
+
+        # 创建 Gemini 客户端
+        llm = create_google_openai_llm(
+            model="gemini-2.5-flash",  # 使用快速响应的模型
+            google_api_key=google_api_key,
+            temperature=0.7,  # 稍高的温度以获得更有创意的分析
+            max_tokens=4000,
+        )
+
+        # 构建针对特定股票的提示词
+        prompt = f"""
+请基于您的知识对股票代码 {ticker} 对应的公司进行深度新闻分析。
+分析时间范围：从 {curr_date} 前7天到 {curr_date}。
+
+请按以下格式提供详细分析：
+
+### {ticker} 股票新闻分析报告 ({curr_date})
+
+**重要声明**: 以下分析基于历史数据和公开信息，不包含实时新闻数据，仅供参考。
+
+#### 1. 公司基本信息
+- 公司全称：[请识别 {ticker} 对应的公司名称]
+- 所属行业：[公司主营业务领域]
+- 市场地位：[在行业中的地位和竞争优势]
+- 主要业务：[核心业务描述]
+
+#### 2. 近期可能关注的新闻类型
+- 财报发布情况（季度/年度业绩）
+- 产品发布或技术创新
+- 管理层变动或战略调整
+- 合作伙伴关系或并购活动
+- 监管政策影响
+- 市场竞争动态
+
+#### 3. 行业趋势分析
+- 所在行业的发展趋势
+- 技术革新对公司的影响
+- 市场需求变化
+- 供应链相关因素
+- 宏观经济环境影响
+
+#### 4. 投资关注要点
+- 关键财务指标趋势
+- 增长驱动因素
+- 潜在风险因素
+- 市场预期与估值
+- 技术面分析建议
+
+#### 5. 新闻影响评估
+- 正面新闻因素
+- 负面风险提醒
+- 中性信息解读
+- 对股价可能影响
+
+#### 6. 交易建议
+- 短期交易关注点
+- 中长期投资价值
+- 风险控制建议
+- 关键价格位置
+
+**风险提示**: 
+1. 本分析不构成投资建议，投资有风险
+2. 请结合实时新闻和最新财报做决策
+3. 建议设置止损，控制风险
+4. 关注市场整体环境变化
+
+---
+*分析生成时间: {curr_date}*
+*数据来源: Google Gemini AI 基于公开信息分析*
+"""
+
+        # 调用 Gemini
+        message = HumanMessage(content=prompt)
+        response = llm.invoke([message])
+
+        if hasattr(response, "content") and response.content:
+            return response.content
+        else:
+            return f"Gemini API 调用成功但未返回 {ticker} 的新闻内容"
+
+    except Exception as e:
+        error_msg = f"Google Gemini {ticker} 股票新闻获取失败: {str(e)}"
+        print(f"错误: {error_msg}")
+        return error_msg
 
 
 def get_fundamentals_finnhub(ticker, curr_date):
