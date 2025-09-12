@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 import logging
+from sqlalchemy import false
 from tqdm import tqdm
 
 # 导入Reddit API库
@@ -88,6 +89,26 @@ DEFAULT_SUBREDDITS = {
         "CryptoMarkets",
         "altcoin",
     ],
+}
+
+# 股票专用subreddit配置
+STOCK_SUBREDDITS = [
+    "wallstreetbets",
+    "stocks",
+    "investing",
+    "StockMarket",
+    "SecurityAnalysis",
+    "ValueInvesting",
+]
+
+# subreddit权重配置 (用于热度计算)
+SUBREDDIT_WEIGHTS = {
+    "wallstreetbets": 1.0,  # 影响力最大
+    "stocks": 0.8,
+    "investing": 0.7,
+    "StockMarket": 0.6,
+    "SecurityAnalysis": 0.5,
+    "ValueInvesting": 0.4,
 }
 
 
@@ -224,7 +245,7 @@ class RedditDataDownloader:
 
     def save_posts_to_jsonl(self, posts: List[Dict], file_path: Path) -> bool:
         """
-        将帖子数据保存为JSONL格式
+        将帖子数据保存为JSONL格式，支持去重和增量更新
 
         Args:
             posts: 帖子数据列表
@@ -236,12 +257,87 @@ class RedditDataDownloader:
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
+            # 读取现有数据
+            existing_posts = {}
+            if file_path.exists():
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                try:
+                                    post_data = json.loads(line)
+                                    if "id" in post_data:
+                                        existing_posts[post_data["id"]] = post_data
+                                except json.JSONDecodeError as e:
+                                    logger.warning(f"⚠️ 跳过无效的JSON行: {e}")
+                                    continue
+                except Exception as e:
+                    logger.warning(f"⚠️ 读取现有文件失败，将创建新文件: {e}")
+
+            # 处理新帖子数据
+            new_posts = 0
+            updated_posts = 0
+            skipped_posts = 0
+
+            for post in posts:
+                if "id" not in post:
+                    logger.warning("⚠️ 帖子缺少ID，跳过")
+                    continue
+
+                post_id = post["id"]
+
+                if post_id in existing_posts:
+                    # 比较帖子内容是否有更新
+                    existing_post = existing_posts[post_id]
+
+                    # 检查关键字段是否有变化
+                    key_fields = [
+                        "title",
+                        "selftext",
+                        "score",
+                        "ups",
+                        "num_comments",
+                        "upvote_ratio",
+                    ]
+                    has_changes = False
+
+                    for field in key_fields:
+                        if post.get(field) != existing_post.get(field):
+                            has_changes = True
+                            break
+
+                    if has_changes:
+                        # 更新帖子数据，保留创建时间等原有信息
+                        updated_post = existing_post.copy()
+                        updated_post.update(post)
+                        updated_post["last_updated"] = datetime.now().isoformat()
+                        existing_posts[post_id] = updated_post
+                        updated_posts += 1
+                        logger.debug(f"🔄 更新帖子: {post_id}")
+                    else:
+                        # 内容无变化，跳过
+                        skipped_posts += 1
+                        logger.debug(f"⏭️ 帖子无变化，跳过: {post_id}")
+                else:
+                    # 新帖子
+                    post["first_saved"] = datetime.now().isoformat()
+                    existing_posts[post_id] = post
+                    new_posts += 1
+                    logger.debug(f"➕ 新增帖子: {post_id}")
+
+            # 保存所有数据
             with open(file_path, "w", encoding="utf-8") as f:
-                for post in posts:
-                    json.dump(post, f, ensure_ascii=False)
+                for post_data in existing_posts.values():
+                    json.dump(post_data, f, ensure_ascii=False)
                     f.write("\n")
 
-            logger.info(f"💾 成功保存 {len(posts)} 个帖子到 {file_path}")
+            total_posts = len(existing_posts)
+            logger.info(f"💾 成功保存到 {file_path}")
+            logger.info(
+                f"📊 统计: 总计 {total_posts} 个帖子 (新增 {new_posts}, 更新 {updated_posts}, 跳过 {skipped_posts})"
+            )
+
             return True
 
         except Exception as e:
@@ -266,7 +362,7 @@ class RedditDataDownloader:
             limit_per_subreddit: 每个subreddit的下载限制
             category_type: 帖子分类 (hot, new, top, rising)
             time_filter: 时间筛选
-            force_refresh: 是否强制刷新已存在的文件
+            force_refresh: 是否强制刷新，由于已支持增量更新，此参数主要用于日志显示
 
         Returns:
             bool: 下载是否成功
@@ -297,9 +393,6 @@ class RedditDataDownloader:
 
                     # 检查文件是否已存在
                     file_path = category_dir / f"{subreddit_name}.jsonl"
-                    if file_path.exists() and not force_refresh:
-                        logger.info(f"📄 文件已存在，跳过: {file_path}")
-                        continue
 
                     # 下载数据
                     posts = self.download_subreddit_data(
@@ -652,3 +745,769 @@ if __name__ == "__main__":
 
         print("\n🎉 下载完成!")
         print(f"📊 结果: {results}")
+
+
+class StockPopularityAnalyzer:
+    """股票热度分析器"""
+
+    def __init__(self, data_dir: Optional[str] = None):
+        """
+        初始化股票热度分析器
+
+        Args:
+            data_dir: Reddit数据存储目录
+        """
+        self.data_dir = Path(data_dir or "data/reddit_data")
+
+    def generate_stock_keywords(self, ticker: str) -> List[str]:
+        """
+        生成股票的关键词列表，用于匹配
+
+        Args:
+            ticker: 股票代码 (如 "AAPL")
+
+        Returns:
+            List[str]: 关键词列表
+        """
+        keywords = []
+
+        # 基础股票代码匹配
+        keywords.extend(
+            [
+                ticker,
+                f"${ticker}",
+                f"${ticker.upper()}",
+                f"{ticker.upper()}",
+                f"{ticker.lower()}",
+            ]
+        )
+
+        # 从映射表获取公司名称
+        if ticker in ticker_to_company:
+            company_names = ticker_to_company[ticker]
+            if " OR " in company_names:
+                # 处理多个名称的情况
+                for name in company_names.split(" OR "):
+                    keywords.append(name.strip())
+            else:
+                keywords.append(company_names)
+
+        # 去重并返回
+        return list(set(keywords))
+
+    def calculate_post_relevance(self, post: Dict, keywords: List[str]) -> float:
+        """
+        计算帖子与股票的相关度
+
+        Args:
+            post: 帖子数据
+            keywords: 关键词列表
+
+        Returns:
+            float: 相关度分数 (0-1)
+        """
+        title = post.get("title", "").lower()
+        content = post.get("selftext", "").lower()
+
+        # 标题匹配权重更高
+        title_matches = 0
+        content_matches = 0
+
+        for keyword in keywords:
+            keyword_lower = keyword.lower()
+
+            # 精确匹配
+            if keyword_lower in title:
+                title_matches += 1
+            if keyword_lower in content:
+                content_matches += 1
+
+            # 单词边界匹配 (避免部分匹配)
+            import re
+
+            pattern = r"\b" + re.escape(keyword_lower) + r"\b"
+            if re.search(pattern, title):
+                title_matches += 2  # 更高权重
+            if re.search(pattern, content):
+                content_matches += 1
+
+        # 计算相关度分数
+        title_score = min(title_matches * 0.3, 1.0)  # 标题最高贡献0.3
+        content_score = min(content_matches * 0.1, 0.7)  # 内容最高贡献0.7
+
+        return min(title_score + content_score, 1.0)
+
+    def calculate_post_popularity_score(
+        self, post: Dict, subreddit_weight: float = 1.0
+    ) -> float:
+        """
+        计算帖子的热度分数
+
+        Args:
+            post: 帖子数据
+            subreddit_weight: subreddit权重
+
+        Returns:
+            float: 热度分数
+        """
+        # 基础互动数据
+        ups = post.get("ups", 0)
+        comments = post.get("num_comments", 0)
+        score = post.get("score", 0)
+        upvote_ratio = post.get("upvote_ratio", 0.5)
+
+        # 时间衰减因子 (越新的帖子权重越高)
+        created_utc = post.get("created_utc", 0)
+        current_time = time.time()
+        time_diff_hours = (current_time - created_utc) / 3600
+
+        # 24小时内为1.0，之后逐渐衰减
+        time_decay = max(0.1, 1.0 / (1 + time_diff_hours / 24))
+
+        # 计算基础热度分数
+        engagement_score = (ups * 1.0) + (comments * 0.8) + (score * 0.6)
+        quality_score = upvote_ratio * 0.5
+
+        # 综合分数
+        total_score = (engagement_score + quality_score) * subreddit_weight * time_decay
+
+        return total_score
+
+    def analyze_stock_popularity(
+        self,
+        ticker: str,
+        subreddits: Optional[List[str]] = None,
+        min_relevance: float = 0.1,
+        days_back: int = 7,
+    ) -> Dict:
+        """
+        分析指定股票的热度
+
+        Args:
+            ticker: 股票代码
+            subreddits: 要分析的subreddit列表，默认使用STOCK_SUBREDDITS
+            min_relevance: 最小相关度阈值
+            days_back: 分析过去几天的数据
+
+        Returns:
+            Dict: 分析结果
+        """
+        if subreddits is None:
+            subreddits = STOCK_SUBREDDITS
+
+        keywords = self.generate_stock_keywords(ticker)
+
+        # 计算时间范围
+        cutoff_time = time.time() - (days_back * 24 * 3600)
+
+        results = {
+            "ticker": ticker,
+            "keywords": keywords,
+            "analysis_period_days": days_back,
+            "total_mentions": 0,
+            "total_popularity_score": 0.0,
+            "subreddit_breakdown": {},
+            "top_posts": [],
+            "average_sentiment": 0.0,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        all_relevant_posts = []
+
+        for subreddit_name in subreddits:
+            subreddit_data = {
+                "name": subreddit_name,
+                "mentions": 0,
+                "popularity_score": 0.0,
+                "posts": [],
+            }
+
+            # 获取subreddit权重
+            weight = SUBREDDIT_WEIGHTS.get(subreddit_name, 0.5)
+
+            # 读取subreddit数据文件
+            data_file = self.data_dir / "company_news" / f"{subreddit_name}.jsonl"
+            if not data_file.exists():
+                logger.warning(f"⚠️ 数据文件不存在: {data_file}")
+                continue
+
+            try:
+                with open(data_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        try:
+                            post = json.loads(line)
+
+                            # 时间过滤
+                            if post.get("created_utc", 0) < cutoff_time:
+                                continue
+
+                            # 计算相关度
+                            relevance = self.calculate_post_relevance(post, keywords)
+                            if relevance < min_relevance:
+                                continue
+
+                            # 计算热度分数
+                            popularity_score = self.calculate_post_popularity_score(
+                                post, weight
+                            )
+
+                            # 添加到结果
+                            post_result = {
+                                "id": post.get("id"),
+                                "title": post.get("title"),
+                                "subreddit": subreddit_name,
+                                "score": post.get("score", 0),
+                                "comments": post.get("num_comments", 0),
+                                "upvotes": post.get("ups", 0),
+                                "relevance": relevance,
+                                "popularity_score": popularity_score,
+                                "url": post.get("permalink", ""),
+                                "created_utc": post.get("created_utc"),
+                            }
+
+                            subreddit_data["posts"].append(post_result)
+                            all_relevant_posts.append(post_result)
+                            subreddit_data["mentions"] += 1
+                            subreddit_data["popularity_score"] += popularity_score
+
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"⚠️ JSON解析错误: {e}")
+                            continue
+
+            except Exception as e:
+                logger.error(f"❌ 读取文件失败 {data_file}: {e}")
+                continue
+
+            results["subreddit_breakdown"][subreddit_name] = subreddit_data
+
+        # 计算总体统计
+        results["total_mentions"] = len(all_relevant_posts)
+        results["total_popularity_score"] = sum(
+            post["popularity_score"] for post in all_relevant_posts
+        )
+
+        # 获取热门帖子 (按热度分数排序)
+        all_relevant_posts.sort(key=lambda x: x["popularity_score"], reverse=True)
+        results["top_posts"] = all_relevant_posts[:10]  # 取前10个
+
+        # 计算平均分数
+        if results["total_mentions"] > 0:
+            results["average_popularity_score"] = (
+                results["total_popularity_score"] / results["total_mentions"]
+            )
+        else:
+            results["average_popularity_score"] = 0.0
+
+        logger.info(
+            f"📊 {ticker} 分析完成: {results['total_mentions']} 次提及, 总热度: {results['total_popularity_score']:.2f}"
+        )
+
+        return results
+
+    def generate_stock_popularity_ranking(
+        self,
+        tickers: Optional[List[str]] = None,
+        subreddits: Optional[List[str]] = None,
+        min_relevance: float = 0.1,
+        days_back: int = 7,
+        top_n: int = 20,
+    ) -> Dict:
+        """
+        生成股票热度排行榜
+
+        Args:
+            tickers: 要分析的股票代码列表，默认使用ticker_to_company中的所有股票
+            subreddits: 要分析的subreddit列表
+            min_relevance: 最小相关度阈值
+            days_back: 分析过去几天的数据
+            top_n: 返回前N名
+
+        Returns:
+            Dict: 排行榜结果
+        """
+        if tickers is None:
+            tickers = list(ticker_to_company.keys())
+
+        logger.info(f"🏆 开始生成股票热度排行榜 (分析 {len(tickers)} 只股票)")
+
+        rankings = []
+
+        with tqdm(tickers, desc="分析股票热度") as pbar:
+            for ticker in pbar:
+                pbar.set_description(f"分析 {ticker}")
+
+                try:
+                    analysis = self.analyze_stock_popularity(
+                        ticker=ticker,
+                        subreddits=subreddits,
+                        min_relevance=min_relevance,
+                        days_back=days_back,
+                    )
+
+                    # 只包含有提及的股票
+                    if analysis["total_mentions"] > 0:
+                        ranking_entry = {
+                            "rank": 0,  # 稍后填入
+                            "ticker": ticker,
+                            "company_name": ticker_to_company.get(ticker, ticker),
+                            "total_mentions": analysis["total_mentions"],
+                            "total_popularity_score": analysis[
+                                "total_popularity_score"
+                            ],
+                            "average_popularity_score": analysis[
+                                "average_popularity_score"
+                            ],
+                            "top_subreddit": self._get_top_subreddit(
+                                analysis["subreddit_breakdown"]
+                            ),
+                            "trend_description": self._generate_trend_description(
+                                analysis
+                            ),
+                            "sample_posts": analysis["top_posts"][
+                                :3
+                            ],  # 只取前3个代表性帖子
+                        }
+                        rankings.append(ranking_entry)
+
+                except Exception as e:
+                    logger.error(f"❌ 分析 {ticker} 失败: {e}")
+                    continue
+
+                # 避免API限制
+                time.sleep(0.1)
+
+        # 按总热度分数排序
+        rankings.sort(key=lambda x: x["total_popularity_score"], reverse=True)
+
+        # 添加排名
+        for i, entry in enumerate(rankings[:top_n]):
+            entry["rank"] = i + 1
+
+        # 生成排行榜结果
+        result = {
+            "generated_at": datetime.now().isoformat(),
+            "analysis_period_days": days_back,
+            "total_stocks_analyzed": len(tickers),
+            "stocks_with_mentions": len(rankings),
+            "top_stocks": rankings[:top_n],
+            "summary_stats": self._generate_summary_stats(rankings[:top_n]),
+        }
+
+        logger.info(f"🎉 排行榜生成完成! 共发现 {len(rankings)} 只有讨论的股票")
+
+        return result
+
+    def _get_top_subreddit(self, subreddit_breakdown: Dict) -> str:
+        """获取讨论最多的subreddit"""
+        if not subreddit_breakdown:
+            return ""
+
+        top_subreddit = max(subreddit_breakdown.items(), key=lambda x: x[1]["mentions"])
+        return top_subreddit[0]
+
+    def _generate_trend_description(self, analysis: Dict) -> str:
+        """生成趋势描述"""
+        mentions = analysis["total_mentions"]
+
+        if mentions == 0:
+            return "无讨论"
+        elif mentions < 5:
+            return "轻度讨论"
+        elif mentions < 20:
+            return "中等讨论"
+        elif mentions < 50:
+            return "活跃讨论"
+        else:
+            return "热门讨论"
+
+    def _generate_summary_stats(self, top_stocks: List[Dict]) -> Dict:
+        """生成汇总统计信息"""
+        if not top_stocks:
+            return {}
+
+        total_mentions = sum(stock["total_mentions"] for stock in top_stocks)
+        total_score = sum(stock["total_popularity_score"] for stock in top_stocks)
+
+        return {
+            "total_mentions_all_stocks": total_mentions,
+            "total_popularity_score_all_stocks": total_score,
+            "average_mentions_per_stock": total_mentions / len(top_stocks),
+            "most_discussed_stock": top_stocks[0]["ticker"] if top_stocks else "",
+            "hottest_stock": max(
+                top_stocks, key=lambda x: x["average_popularity_score"]
+            )["ticker"]
+            if top_stocks
+            else "",
+        }
+
+    def print_popularity_ranking(
+        self, ranking_result: Dict, show_details: bool = False
+    ):
+        """
+        美观地打印股票热度排行榜
+
+        Args:
+            ranking_result: generate_stock_popularity_ranking的返回结果
+            show_details: 是否显示详细信息
+        """
+        output = self.format_popularity_ranking(ranking_result, show_details)
+        print(output)
+
+    def format_popularity_ranking(
+        self,
+        ranking_result: Dict,
+        show_details: bool = False,
+        include_full_posts: bool = False,
+    ) -> str:
+        """
+        格式化股票热度排行榜为字符串
+
+        Args:
+            ranking_result: generate_stock_popularity_ranking的返回结果
+            show_details: 是否显示详细信息
+            include_full_posts: 是否包含完整的帖子内容
+
+        Returns:
+            str: 格式化后的排行榜字符串
+        """
+        lines = []
+
+        # 标题和基本信息
+        lines.append("🏆 Reddit股票热度排行榜")
+        lines.append("=" * 60)
+        lines.append(f"📅 分析时间段: 最近 {ranking_result['analysis_period_days']} 天")
+        lines.append(f"📊 分析股票总数: {ranking_result['total_stocks_analyzed']}")
+        lines.append(f"💬 有讨论的股票: {ranking_result['stocks_with_mentions']}")
+        lines.append(f"⏰ 生成时间: {ranking_result['generated_at']}")
+        lines.append("")
+
+        top_stocks = ranking_result["top_stocks"]
+
+        # 排行榜
+        lines.append("📈 热度排行榜:")
+        lines.append("-" * 60)
+        lines.append(
+            f"{'排名':<4} {'股票':<6} {'公司名':<20} {'提及':<6} {'热度':<8} {'趋势':<8}"
+        )
+        lines.append("-" * 60)
+
+        for stock in top_stocks:
+            lines.append(
+                f"{stock['rank']:<4} {stock['ticker']:<6} {stock['company_name'][:18]:<20} "
+                f"{stock['total_mentions']:<6} {stock['total_popularity_score']:<8.1f} {stock['trend_description']:<8}"
+            )
+
+        # 详细信息
+        if show_details and top_stocks:
+            lines.append("\n🔥 热门股票详情:")
+            lines.append("-" * 60)
+
+            for i, stock in enumerate(top_stocks[:5]):  # 只显示前5名详情
+                lines.append(
+                    f"\n{stock['rank']}. {stock['ticker']} - {stock['company_name']}"
+                )
+                lines.append(f"   📊 提及次数: {stock['total_mentions']}")
+                lines.append(f"   🔥 总热度: {stock['total_popularity_score']:.1f}")
+                lines.append(f"   📍 主要讨论区: r/{stock['top_subreddit']}")
+
+                # 如果需要包含完整帖子内容，则添加subreddit分布详情
+                if include_full_posts and i == 0:  # 只为第一名显示详细分布
+                    # 计算subreddit分布
+                    subreddit_dist = {}
+                    for post in stock["sample_posts"]:
+                        subreddit = post.get("subreddit", "unknown")
+                        if subreddit not in subreddit_dist:
+                            subreddit_dist[subreddit] = {"count": 0, "total_score": 0}
+                        subreddit_dist[subreddit]["count"] += 1
+                        subreddit_dist[subreddit]["total_score"] += post.get(
+                            "popularity_score", 0
+                        )
+
+                    if subreddit_dist:
+                        lines.append("   📋 各讨论区分布:")
+                        sorted_subreddits = sorted(
+                            subreddit_dist.items(),
+                            key=lambda x: x[1]["count"],
+                            reverse=True,
+                        )
+                        for subreddit, data in sorted_subreddits:
+                            lines.append(
+                                f"      r/{subreddit}: {data['count']}次提及, 总热度{data['total_score']:.1f}"
+                            )
+                        lines.append("")
+
+                if stock["sample_posts"]:
+                    lines.append("   📝 热门帖子:")
+                    post_limit = (
+                        len(stock["sample_posts"])
+                        if include_full_posts
+                        else min(3, len(stock["sample_posts"]))
+                    )
+
+                    for j, post in enumerate(stock["sample_posts"][:post_limit]):
+                        if include_full_posts:
+                            # 完整帖子信息
+                            lines.append(f"      {j + 1}. 标题: {post['title']}")
+                            lines.append(f"         来源: r/{post['subreddit']}")
+                            lines.append(
+                                f"         互动: 👍{post['upvotes']} 💬{post['comments']} 分数:{post['score']}"
+                            )
+                            lines.append(f"         相关度: {post['relevance']:.2f}")
+                            lines.append(
+                                f"         热度分数: {post['popularity_score']:.1f}"
+                            )
+                            if post.get("url"):
+                                lines.append(f"         链接: {post['url']}")
+                                # pass
+                            lines.append("")
+                        else:
+                            # 简化信息
+                            lines.append(f"      {j + 1}. {post['title'][:80]}...")
+                            lines.append(
+                                f"         (👍{post['upvotes']} 💬{post['comments']} "
+                                f"相关度:{post['relevance']:.2f} 热度:{post['popularity_score']:.1f})"
+                            )
+
+        # 汇总统计
+        if "summary_stats" in ranking_result:
+            stats = ranking_result["summary_stats"]
+            lines.append("\n📈 汇总统计:")
+            lines.append(f"   🎯 最受讨论: {stats.get('most_discussed_stock', 'N/A')}")
+            lines.append(f"   🔥 最热门: {stats.get('hottest_stock', 'N/A')}")
+            lines.append(
+                f"   💬 平均提及: {stats.get('average_mentions_per_stock', 0):.1f} 次/股票"
+            )
+
+        return "\n".join(lines)
+
+
+# 便捷API函数
+def analyze_stock_popularity(
+    ticker: str,
+    days_back: int = 7,
+    min_relevance: float = 0.1,
+    data_dir: Optional[str] = None,
+) -> Dict:
+    """
+    便捷函数：分析单只股票的Reddit热度
+
+    Args:
+        ticker: 股票代码 (如 "AAPL")
+        days_back: 分析过去几天的数据
+        min_relevance: 最小相关度阈值
+        data_dir: 数据目录
+
+    Returns:
+        Dict: 分析结果
+    """
+    analyzer = StockPopularityAnalyzer(data_dir=data_dir)
+    return analyzer.analyze_stock_popularity(
+        ticker=ticker, min_relevance=min_relevance, days_back=days_back
+    )
+
+
+def generate_reddit_stock_ranking(
+    top_n: int = 20,
+    days_back: int = 7,
+    tickers: Optional[List[str]] = None,
+    data_dir: Optional[str] = None,
+    print_results: bool = True,
+    show_details: bool = False,
+) -> Dict:
+    """
+    便捷函数：生成Reddit股票热度排行榜
+
+    Args:
+        top_n: 返回前N名
+        days_back: 分析过去几天的数据
+        tickers: 要分析的股票列表，默认分析所有已配置的股票
+        data_dir: 数据目录
+        print_results: 是否打印结果
+        show_details: 是否显示详细信息
+
+    Returns:
+        Dict: 排行榜结果
+    """
+    analyzer = StockPopularityAnalyzer(data_dir=data_dir)
+
+    ranking_result = analyzer.generate_stock_popularity_ranking(
+        tickers=tickers, days_back=days_back, top_n=top_n
+    )
+
+    # if print_results:
+    #     analyzer.print_popularity_ranking(ranking_result, show_details=show_details)
+
+    formatted_text = analyzer.format_popularity_ranking(
+        ranking_result, show_details=True, include_full_posts=True
+    )
+
+    return formatted_text
+
+
+def format_reddit_stock_ranking(
+    top_n: int = 20,
+    days_back: int = 7,
+    tickers: Optional[List[str]] = None,
+    data_dir: Optional[str] = None,
+    show_details: bool = True,
+    include_full_posts: bool = True,
+) -> str:
+    """
+    便捷函数：生成Reddit股票热度排行榜并返回格式化字符串
+
+    Args:
+        top_n: 返回前N名
+        days_back: 分析过去几天的数据
+        tickers: 要分析的股票列表，默认分析所有已配置的股票
+        data_dir: 数据目录
+        show_details: 是否显示详细信息
+        include_full_posts: 是否包含完整的帖子内容
+
+    Returns:
+        str: 格式化的排行榜字符串
+    """
+    analyzer = StockPopularityAnalyzer(data_dir=data_dir)
+
+    ranking_result = analyzer.generate_stock_popularity_ranking(
+        tickers=tickers, days_back=days_back, top_n=top_n
+    )
+
+    return analyzer.format_popularity_ranking(
+        ranking_result, show_details=show_details, include_full_posts=include_full_posts
+    )
+
+
+def get_trending_stocks(
+    days_back: int = 1, min_mentions: int = 5, data_dir: Optional[str] = None
+) -> List[Dict]:
+    """
+    便捷函数：获取近期热门股票
+
+    Args:
+        days_back: 分析过去几天的数据
+        min_mentions: 最少提及次数阈值
+        data_dir: 数据目录
+
+    Returns:
+        List[Dict]: 热门股票列表
+    """
+    analyzer = StockPopularityAnalyzer(data_dir=data_dir)
+
+    ranking_result = analyzer.generate_stock_popularity_ranking(
+        days_back=days_back,
+        top_n=50,  # 获取更多候选
+    )
+
+    # 筛选符合条件的热门股票
+    trending_stocks = [
+        stock
+        for stock in ranking_result["top_stocks"]
+        if stock["total_mentions"] >= min_mentions
+    ]
+
+    return trending_stocks
+
+
+def compare_stock_popularity(
+    tickers: List[str], days_back: int = 7, data_dir: Optional[str] = None
+) -> Dict:
+    """
+    便捷函数：比较多只股票的热度
+
+    Args:
+        tickers: 股票代码列表
+        days_back: 分析过去几天的数据
+        data_dir: 数据目录
+
+    Returns:
+        Dict: 比较结果
+    """
+    analyzer = StockPopularityAnalyzer(data_dir=data_dir)
+
+    comparisons = {}
+
+    for ticker in tickers:
+        try:
+            analysis = analyzer.analyze_stock_popularity(
+                ticker=ticker, days_back=days_back
+            )
+            comparisons[ticker] = {
+                "mentions": analysis["total_mentions"],
+                "popularity_score": analysis["total_popularity_score"],
+                "average_score": analysis["average_popularity_score"],
+                "company_name": ticker_to_company.get(ticker, ticker),
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ 分析 {ticker} 失败: {e}")
+            comparisons[ticker] = None
+
+    # 按热度排序
+    valid_comparisons = {k: v for k, v in comparisons.items() if v is not None}
+    sorted_tickers = sorted(
+        valid_comparisons.items(), key=lambda x: x[1]["popularity_score"], reverse=True
+    )
+
+    result = {
+        "comparison_date": datetime.now().isoformat(),
+        "analysis_period_days": days_back,
+        "tickers_analyzed": tickers,
+        "successful_analyses": len(valid_comparisons),
+        "rankings": sorted_tickers,
+        "winner": sorted_tickers[0][0] if sorted_tickers else None,
+    }
+
+    return result
+
+
+def download_and_analyze_stocks(
+    tickers: List[str],
+    subreddit_category: str = "company_news",
+    limit_per_subreddit: int = 100,
+    analysis_days: int = 7,
+    data_dir: Optional[str] = None,
+    need_download: bool = False,
+) -> Dict:
+    """
+    便捷函数：一键下载数据并分析股票热度
+
+    Args:
+        tickers: 要分析的股票代码列表
+        subreddit_category: subreddit分类
+        limit_per_subreddit: 每个subreddit的下载限制
+        analysis_days: 分析天数
+        data_dir: 数据目录
+
+    Returns:
+        Dict: 分析结果
+    """
+    logger.info("🚀 开始一键下载并分析股票热度")
+
+    # 步骤1: 下载最新数据
+    logger.info("📥 步骤1: 下载Reddit数据...")
+    if need_download:
+        download_reddit_data(
+            category=subreddit_category,
+            limit_per_subreddit=limit_per_subreddit,
+            data_dir=data_dir,
+            force_refresh=True,
+        )
+
+    # 步骤2: 分析股票热度
+    logger.info("📊 步骤2: 分析股票热度...")
+    analysis_result = generate_reddit_stock_ranking(
+        top_n=len(tickers),
+        days_back=analysis_days,
+        tickers=tickers,
+        data_dir=data_dir,
+        print_results=True,
+        show_details=True,
+    )
+
+    return {
+        "analysis_result": analysis_result,
+        "summary": f"成功分析 {len(tickers)} 只股票的Reddit热度",
+    }

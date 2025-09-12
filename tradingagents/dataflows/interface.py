@@ -484,8 +484,7 @@ def get_reddit_company_news(
 
     # 尝试多个可能的数据源目录
     possible_categories = [
-        f"company_{ticker.lower()}",  # 新的公司特定目录格式
-        # "company_news",  # 原来的通用目录格式
+        "company_news",  # 原来的通用目录格式
     ]
 
     logger.info(f"🔍 [Reddit公司新闻] 为 {ticker} 尝试以下数据源:")

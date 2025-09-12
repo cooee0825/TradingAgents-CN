@@ -76,7 +76,7 @@ def test_toolkit_tools():
                 # 测试调用
                 print("📰 测试Reddit新闻获取...")
                 news = toolkit.get_reddit_stock_info.invoke(
-                    {"ticker": "AAPL", "curr_date": "2025-09-10"}
+                    {"ticker": "TSLA", "curr_date": "2025-09-12"}
                 )
                 print(f"Google新闻: {news}")
                 if news and len(news) > 100:

@@ -127,9 +127,21 @@ class Toolkit:
         print(
             f"📊 [DEBUG] get_reddit_stock_info 被调用: ticker={ticker}, date={curr_date}"
         )
-        stock_news_results = interface.get_reddit_company_news(ticker, curr_date, 7, 20)
+        result = Toolkit.download_reddit_company_data.invoke(
+            {
+                "ticker": ticker,
+                "category_name": ticker,
+                "limit_per_subreddit": 100,
+                "category_type": "hot",
+                "time_filter": "week",
+                "force_refresh": True,
+            }
+        )
 
-        return stock_news_results
+        stock_news_results = interface.get_reddit_company_news(ticker, curr_date, 7, 20)
+        print(f"stock_news_results: {len(stock_news_results)}")
+        print(f"result: {len(result)}")
+        return result + "\n" + stock_news_results
 
     @staticmethod
     @tool
@@ -143,87 +155,42 @@ class Toolkit:
         force_refresh: Annotated[bool, "是否强制刷新已存在的数据"] = False,
     ) -> str:
         """
-        下载特定公司的Reddit讨论数据
-        自动选择相关的subreddit并下载该公司的讨论帖子
+        下载并分析指定股票在Reddit上的讨论热度
+
+        这个函数会分析指定股票在Reddit主要股票讨论社区的热度，
+        包括提及次数、热度分数、热门帖子等详细信息。
 
         Args:
-            ticker (str): 公司股票代码，如 AAPL, TSLA, MSFT
-            category_name (str): 数据分类名称，默认使用ticker
-            limit_per_subreddit (int): 每个subreddit的下载限制，默认150
-            category_type (str): 帖子分类 (hot, new, top, rising)，默认hot
-            time_filter (str): 时间筛选，仅对top有效，默认week
-            force_refresh (bool): 是否强制刷新已存在的数据，默认False
+            ticker: 股票代码，如 AAPL, TSLA, MSFT
+            category_name: 数据分类名称，建议使用公司名称或ticker
+            limit_per_subreddit: 每个subreddit的下载限制
+            category_type: 帖子分类 (hot, new, top, rising)
+            time_filter: 时间筛选 (all, day, week, month, year)
+            force_refresh: 是否强制刷新已存在的数据
 
         Returns:
-            str: 下载结果报告
+            str: 格式化的股票热度分析报告，包含详细的讨论数据和热门帖子信息
         """
         try:
-            from tradingagents.dataflows.reddit_utils import download_custom_subreddits
+            from tradingagents.dataflows.reddit_utils import format_reddit_stock_ranking
+            from tradingagents.dataflows.reddit_utils import download_reddit_data
 
-            logger.info(f"📥 [Reddit下载工具] 开始下载 {ticker} 公司数据")
-
-            # 设置分类名称
-            if not category_name:
-                category_name = f"company_{ticker.lower()}"
-
-            # 选择与股票投资相关的subreddit
-            investment_subreddits = [
-                "stocks",
-                "investing",
-                "SecurityAnalysis",
-                "ValueInvesting",
-                "StockMarket",
-                "wallstreetbets",
-                "financialindependence",
-                "dividends",
-                "options",
-                "pennystocks",
-            ]
-
-            # 下载数据
-            success = download_custom_subreddits(
-                subreddits=investment_subreddits,
-                category_name=category_name,
-                limit_per_subreddit=limit_per_subreddit,
-                category_type=category_type,
-                time_filter=time_filter,
-                force_refresh=force_refresh,
+            if force_refresh:
+                download_reddit_data(
+                    category="company_news",
+                    limit_per_subreddit=limit_per_subreddit,
+                )
+            # 使用格式化函数直接返回格式化的字符串，包含完整信息供LLM分析
+            ranking_text = format_reddit_stock_ranking(
+                tickers=[ticker],
+                days_back=7,
+                top_n=5,
+                show_details=True,
+                include_full_posts=True,
             )
-
-            if success:
-                result = f"""# {ticker} Reddit数据下载完成
-
-## 下载配置
-- **股票代码**: {ticker}
-- **分类名称**: {category_name}  
-- **每个subreddit限制**: {limit_per_subreddit}
-- **帖子类型**: {category_type}
-- **时间筛选**: {time_filter}
-- **强制刷新**: {force_refresh}
-
-## 下载的subreddit
-{chr(10).join([f"- r/{sub}" for sub in investment_subreddits])}
-
-## 数据存储位置
-- 路径: `data/reddit_data/{category_name}/`
-- 格式: 每个subreddit保存为单独的.jsonl文件
-- 总计: {len(investment_subreddits)} 个subreddit
-
-✅ **下载成功！** 现在可以使用 `get_reddit_stock_info` 工具分析该公司的Reddit讨论数据。
-
-💡 **提示**: 下载的数据将自动与现有的Reddit分析工具集成，无需额外配置。
-"""
-                logger.info(f"✅ [Reddit下载工具] {ticker} 数据下载成功")
-                return result
-            else:
-                error_msg = f"❌ {ticker} Reddit数据下载失败，请检查网络连接和API配置"
-                logger.error(f"❌ [Reddit下载工具] {error_msg}")
-                return error_msg
-
+            return ranking_text
         except Exception as e:
-            error_msg = f"Reddit数据下载工具执行失败: {str(e)}"
-            logger.error(f"❌ [Reddit下载工具] {error_msg}")
-            return error_msg
+            return f"❌ 下载Reddit公司新闻失败: {str(e)}"
 
     @staticmethod
     @tool
