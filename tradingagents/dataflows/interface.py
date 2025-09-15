@@ -70,6 +70,187 @@ except ImportError as e:
 from .config import get_config, set_config, DATA_DIR
 
 
+def clear_yfin_cache(
+    symbol: str = None,
+    older_than_hours: int = None,
+) -> str:
+    """
+    清理YFinance数据缓存
+
+    Args:
+        symbol: 指定股票代码，None表示清理所有
+        older_than_hours: 清理指定小时前的缓存，None表示清理所有
+
+    Returns:
+        str: 清理结果报告
+    """
+    try:
+        from .cache_manager import get_cache
+
+        cache = get_cache()
+
+        # 获取缓存目录
+        us_stock_dir = cache.us_stock_dir
+        metadata_dir = cache.metadata_dir
+
+        cleared_count = 0
+        total_size = 0
+
+        # 遍历所有缓存文件
+        for metadata_file in metadata_dir.glob("*_meta.json"):
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+
+                # 检查是否为YFinance数据
+                if metadata.get("data_source") not in [
+                    "yfinance_online",
+                    "yfinance_local",
+                ]:
+                    continue
+
+                # 检查股票代码过滤
+                if symbol and metadata.get("symbol", "").upper() != symbol.upper():
+                    continue
+
+                # 检查时间过滤
+                if older_than_hours:
+                    from datetime import datetime, timedelta
+
+                    cached_at = datetime.fromisoformat(metadata.get("cached_at", ""))
+                    if datetime.now() - cached_at < timedelta(hours=older_than_hours):
+                        continue
+
+                # 删除数据文件
+                data_file = metadata.get("file_path")
+                if data_file and os.path.exists(data_file):
+                    file_size = os.path.getsize(data_file)
+                    os.remove(data_file)
+                    total_size += file_size
+
+                # 删除元数据文件
+                os.remove(metadata_file)
+                cleared_count += 1
+
+                logger.info(
+                    f"🗑️ 已清理缓存: {metadata.get('symbol')} - {metadata.get('data_source')}"
+                )
+
+            except Exception as e:
+                logger.warning(f"⚠️ 清理缓存文件失败: {metadata_file} - {e}")
+
+        if cleared_count > 0:
+            size_mb = total_size / (1024 * 1024)
+            result = f"✅ YFinance缓存清理完成:\n"
+            result += f"   - 清理文件数: {cleared_count}\n"
+            result += f"   - 释放空间: {size_mb:.2f} MB\n"
+            if symbol:
+                result += f"   - 目标股票: {symbol.upper()}\n"
+            if older_than_hours:
+                result += f"   - 时间条件: 超过{older_than_hours}小时的缓存\n"
+        else:
+            result = "ℹ️ 未找到需要清理的YFinance缓存文件"
+
+        logger.info(result)
+        return result
+
+    except Exception as e:
+        error_msg = f"❌ YFinance缓存清理失败: {e}"
+        logger.error(error_msg)
+        return error_msg
+
+
+def get_yfin_cache_status() -> str:
+    """
+    获取YFinance缓存状态信息
+
+    Returns:
+        str: 缓存状态报告
+    """
+    try:
+        from .cache_manager import get_cache
+
+        cache = get_cache()
+
+        metadata_dir = cache.metadata_dir
+
+        online_cache_count = 0
+        local_cache_count = 0
+        total_size = 0
+        oldest_cache = None
+        newest_cache = None
+
+        # 遍历所有缓存文件
+        for metadata_file in metadata_dir.glob("*_meta.json"):
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+
+                # 检查是否为YFinance数据
+                data_source = metadata.get("data_source", "")
+                if data_source == "yfinance_online":
+                    online_cache_count += 1
+                elif data_source == "yfinance_local":
+                    local_cache_count += 1
+                else:
+                    continue
+
+                # 计算文件大小
+                data_file = metadata.get("file_path")
+                if data_file and os.path.exists(data_file):
+                    total_size += os.path.getsize(data_file)
+
+                # 记录最老和最新的缓存
+                cached_at = metadata.get("cached_at", "")
+                if cached_at:
+                    if oldest_cache is None or cached_at < oldest_cache:
+                        oldest_cache = cached_at
+                    if newest_cache is None or cached_at > newest_cache:
+                        newest_cache = cached_at
+
+            except Exception as e:
+                logger.warning(f"⚠️ 读取缓存元数据失败: {metadata_file} - {e}")
+
+        # 生成状态报告
+        size_mb = total_size / (1024 * 1024)
+        result = f"📊 YFinance缓存状态报告:\n\n"
+        result += f"💾 缓存统计:\n"
+        result += f"   - 在线数据缓存: {online_cache_count} 个\n"
+        result += f"   - 本地数据缓存: {local_cache_count} 个\n"
+        result += f"   - 总计: {online_cache_count + local_cache_count} 个\n"
+        result += f"   - 占用空间: {size_mb:.2f} MB\n\n"
+
+        if oldest_cache and newest_cache:
+            result += f"⏰ 时间范围:\n"
+            result += f"   - 最早缓存: {oldest_cache[:19]}\n"
+            result += f"   - 最新缓存: {newest_cache[:19]}\n\n"
+
+        # 获取缓存配置
+        us_stock_config = cache.cache_config.get("us_stock_data", {})
+        result += f"⚙️ 缓存配置:\n"
+        result += f"   - TTL: {us_stock_config.get('ttl_hours', 2)} 小时\n"
+        result += f"   - 最大文件数: {us_stock_config.get('max_files', 1000)}\n"
+        result += f"   - 缓存目录: {cache.us_stock_dir}\n\n"
+
+        result += f"💡 管理建议:\n"
+        if online_cache_count + local_cache_count > 100:
+            result += f"   - 缓存文件较多，建议定期清理过期缓存\n"
+        if size_mb > 100:
+            result += f"   - 缓存占用空间较大，建议清理旧缓存释放空间\n"
+        if (
+            oldest_cache
+            and (datetime.now() - datetime.fromisoformat(oldest_cache[:19])).days > 7
+        ):
+            result += f"   - 存在超过7天的缓存，建议清理过期数据\n"
+
+        return result
+
+    except Exception as e:
+        error_msg = f"❌ 获取YFinance缓存状态失败: {e}"
+        logger.error(error_msg)
+        return error_msg
+
+
 def get_finnhub_news(
     ticker: Annotated[
         str,
@@ -715,35 +896,52 @@ def get_YFin_data_window(
     before = date_obj - relativedelta(days=look_back_days)
     start_date = before.strftime("%Y-%m-%d")
 
-    # read in data
-    data = pd.read_csv(
-        os.path.join(
+    # 由于get_YFin_data现在返回字符串格式的报告，直接返回即可
+    try:
+        result = get_YFin_data(symbol, start_date, curr_date)
+        # get_YFin_data返回的已经是格式化的字符串报告
+        if result and isinstance(result, str) and len(result) > 50:
+            return result
+        else:
+            # 如果返回的内容太短或为空，可能是错误信息
+            logger.warning(f"⚠️ [YFin窗口] get_YFin_data返回内容异常，尝试备用方案")
+            raise Exception("get_YFin_data返回内容异常")
+    except Exception as e:
+        logger.error(f"❌ [YFin窗口] 获取数据失败: {e}")
+
+        # 回退到原来的逻辑
+        logger.info(f"🔄 [YFin窗口] 回退到原始读取方式")
+        data_file_path = os.path.join(
             DATA_DIR,
             f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
         )
-    )
 
-    # Extract just the date part for comparison
-    data["DateOnly"] = data["Date"].str[:10]
+        if not os.path.exists(data_file_path):
+            return f"❌ 本地数据文件不存在: {data_file_path}"
 
-    # Filter data between the start and end dates (inclusive)
-    filtered_data = data[
-        (data["DateOnly"] >= start_date) & (data["DateOnly"] <= curr_date)
-    ]
+        data = pd.read_csv(data_file_path)
 
-    # Drop the temporary column we created
-    filtered_data = filtered_data.drop("DateOnly", axis=1)
+        # Extract just the date part for comparison
+        data["DateOnly"] = data["Date"].str[:10]
 
-    # Set pandas display options to show the full DataFrame
-    with pd.option_context(
-        "display.max_rows", None, "display.max_columns", None, "display.width", None
-    ):
-        df_string = filtered_data.to_string()
+        # Filter data between the start and end dates (inclusive)
+        filtered_data = data[
+            (data["DateOnly"] >= start_date) & (data["DateOnly"] <= curr_date)
+        ]
 
-    return (
-        f"## Raw Market Data for {symbol} from {start_date} to {curr_date}:\n\n"
-        + df_string
-    )
+        # Drop the temporary column we created
+        filtered_data = filtered_data.drop("DateOnly", axis=1)
+
+        # Set pandas display options to show the full DataFrame
+        with pd.option_context(
+            "display.max_rows", None, "display.max_columns", None, "display.width", None
+        ):
+            df_string = filtered_data.to_string()
+
+        return (
+            f"## Raw Market Data for {symbol} from {start_date} to {curr_date}:\n\n"
+            + df_string
+        )
 
 
 def get_YFin_data_online(
@@ -757,6 +955,34 @@ def get_YFin_data_online(
 
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
+
+    # 初始化缓存管理器
+    try:
+        from .cache_manager import get_cache
+
+        cache = get_cache()
+
+        # 检查缓存是否存在
+        cached_key = cache.find_cached_stock_data(
+            symbol=symbol.upper(),
+            start_date=start_date,
+            end_date=end_date,
+            data_source="yfinance_online",
+        )
+
+        if cached_key:
+            cached_data = cache.load_stock_data(cached_key)
+            if cached_data is not None:
+                logger.info(
+                    f"💾 [YFin在线] 从缓存加载数据: {symbol.upper()} ({start_date} 到 {end_date})"
+                )
+                return cached_data
+    except Exception as e:
+        logger.warning(f"⚠️ [YFin在线] 缓存检查失败，直接获取数据: {e}")
+
+    logger.info(
+        f"🌐 [YFin在线] 从网络获取数据: {symbol.upper()} ({start_date} 到 {end_date})"
+    )
 
     # Create ticker object
     ticker = yf.Ticker(symbol.upper())
@@ -893,8 +1119,25 @@ def get_YFin_data_online(
     header += "# Trend_Strength: Price deviation from 20-day MA (%)\n"
     header += "# High_20/Low_20: 20-day highest/lowest prices\n\n"
 
-    print(header + csv_string)
-    return header + csv_string
+    result = header + csv_string
+
+    # 保存到缓存
+    try:
+        from .cache_manager import get_cache
+
+        cache = get_cache()
+        cache_key = cache.save_stock_data(
+            symbol=symbol.upper(),
+            data=result,
+            start_date=start_date,
+            end_date=end_date,
+            data_source="yfinance_online",
+        )
+        logger.info(f"💾 [YFin在线] 数据已缓存: {symbol.upper()} -> {cache_key}")
+    except Exception as e:
+        logger.warning(f"⚠️ [YFin在线] 缓存保存失败: {e}")
+
+    return result
 
 
 def get_YFin_data(
@@ -902,34 +1145,36 @@ def get_YFin_data(
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
 ) -> str:
-    # read in data
-    data = pd.read_csv(
-        os.path.join(
-            DATA_DIR,
-            f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
+    # 检查缓存（使用和get_YFin_data_online相同的缓存key）
+    try:
+        from .cache_manager import get_cache
+
+        cache = get_cache()
+
+        # 检查在线缓存是否存在
+        cached_key = cache.find_cached_stock_data(
+            symbol=symbol.upper(),
+            start_date=start_date,
+            end_date=end_date,
+            data_source="yfinance_online",
         )
+
+        if cached_key:
+            cached_data = cache.load_stock_data(cached_key)
+            if cached_data is not None:
+                logger.info(
+                    f"💾 [YFin] 从缓存加载数据: {symbol.upper()} ({start_date} 到 {end_date})"
+                )
+                return cached_data
+    except Exception as e:
+        logger.warning(f"⚠️ [YFin] 缓存检查失败: {e}")
+
+    # 如果缓存中没有数据，调用网络接口获取
+    logger.info(
+        f"🌐 [YFin] 缓存未命中，调用网络接口: {symbol.upper()} ({start_date} 到 {end_date})"
     )
 
-    if end_date > "2025-03-25":
-        raise Exception(
-            f"Get_YFin_Data: {end_date} is outside of the data range of 2015-01-01 to 2025-03-25"
-        )
-
-    # Extract just the date part for comparison
-    data["DateOnly"] = data["Date"].str[:10]
-
-    # Filter data between the start and end dates (inclusive)
-    filtered_data = data[
-        (data["DateOnly"] >= start_date) & (data["DateOnly"] <= end_date)
-    ]
-
-    # Drop the temporary column we created
-    filtered_data = filtered_data.drop("DateOnly", axis=1)
-
-    # remove the index from the dataframe
-    filtered_data = filtered_data.reset_index(drop=True)
-
-    return filtered_data
+    return get_YFin_data_online(symbol, start_date, end_date)
 
 
 def get_stock_news_openai(ticker, curr_date):

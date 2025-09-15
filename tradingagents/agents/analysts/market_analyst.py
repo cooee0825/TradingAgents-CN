@@ -316,7 +316,9 @@ def create_market_analyst(llm, toolkit):
 
         # 获取公司名称
         company_name = _get_company_name(ticker, market_info)
-        logger.info(f"📈 [DEBUG] 公司名称: {ticker} -> {company_name}")
+        logger.info(
+            f"📈 [DEBUG] 公司名称: {ticker} -> {company_name} traceback: {traceback.extract_stack()} "
+        )
 
         if toolkit.config["online_tools"]:
             # 使用统一的市场数据工具，工具内部会自动识别股票类型
@@ -361,12 +363,13 @@ def create_market_analyst(llm, toolkit):
 不要说你将要调用工具，直接调用工具。
 
 **分析要求：**
-1. 调用工具后，基于获取的真实数据进行技术分析
+1. 调用工具后，基于获取的真实数据进行技术分析, 必须使用到get_YFin_data_online工具返回的数据
 2. 分析移动平均线、MACD、RSI、布林带等技术指标
 3. 考虑{market_info["market_name"]}市场特点进行分析
 4. 提供具体的数值和专业分析
 5. 给出明确的投资建议
 6. 所有价格数据使用{market_info["currency_name"]}（{market_info["currency_symbol"]}）表示
+7. 标注清楚时间数据时间范围
 
 **输出格式：**
 ## 📊 股票基本信息
@@ -418,7 +421,7 @@ def create_market_analyst(llm, toolkit):
         chain = prompt | llm.bind_tools(tools)
 
         # print(prompt)
-        print(tool_names)
+        # print(tool_names)
 
         result = chain.invoke(state["messages"])
         print(f"📊 [市场分析师] 结果: {result}")
