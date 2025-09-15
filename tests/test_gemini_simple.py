@@ -127,7 +127,7 @@ def test_gemini_analyst_direct():
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-pro",
             temperature=0.1,
-            max_tokens=8000,
+            max_tokens=16000,
             google_api_key=os.getenv("GOOGLE_API_KEY"),
         )
 

@@ -32,6 +32,8 @@ class ChatGoogleOpenAI(ChatGoogleGenerativeAI):
         # 设置 Google AI 的默认配置
         kwargs.setdefault("temperature", 0.1)
         kwargs.setdefault("max_tokens", 200000)
+        # Google AI 特有配置 - 设置更大的输出长度
+        kwargs.setdefault("max_output_tokens", 8192)  # Gemini模型的最大输出长度
 
         # 检查 API 密钥
         google_api_key = kwargs.get("google_api_key") or os.getenv("GOOGLE_API_KEY")
