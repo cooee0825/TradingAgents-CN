@@ -7,3 +7,4 @@ python start_web.py
 
 ## 测试命令
 python -m dotenv run python tests/test_finnhub_connection.py
+python -m dotenv run python tests/test_gemini_simple.py

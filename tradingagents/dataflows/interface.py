@@ -893,6 +893,7 @@ def get_YFin_data_online(
     header += "# Trend_Strength: Price deviation from 20-day MA (%)\n"
     header += "# High_20/Low_20: 20-day highest/lowest prices\n\n"
 
+    print(header + csv_string)
     return header + csv_string
 
 

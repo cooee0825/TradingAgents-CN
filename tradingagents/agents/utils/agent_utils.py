@@ -1265,7 +1265,7 @@ class Toolkit:
 
             else:
                 # 美股：优先使用FINNHUB API数据源
-                logger.info(f"🇺🇸 [统一市场工具] 处理美股市场数据...")
+                logger.info(f"🇺🇸 [统一市场工具] 处理美股市场数据111111...")
 
                 try:
                     from tradingagents.dataflows.optimized_us_data import (
@@ -1273,6 +1273,7 @@ class Toolkit:
                     )
 
                     us_data = get_us_stock_data_cached(ticker, start_date, end_date)
+                    logger.info(f"🇺🇸 [统一市场工具] 美股市场数据: {us_data}")
                     result_data.append(f"## 美股市场数据\n{us_data}")
                 except Exception as e:
                     result_data.append(f"## 美股市场数据\n获取失败: {e}")

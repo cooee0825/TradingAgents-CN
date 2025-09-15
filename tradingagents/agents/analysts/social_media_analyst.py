@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # 导入统一日志系统和分析模块日志装饰器
