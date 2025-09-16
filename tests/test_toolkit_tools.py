@@ -9,11 +9,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # 添加项目根目录到Python路径
-project_root = Path(__file__).parent
+from pathlib import Path
+from dotenv import load_dotenv
+
+# 添加项目根目录到Python路径
+project_root = Path(__file__).parent.parent  # 向上一级到达项目根目录
 sys.path.insert(0, str(project_root))
 
-# 加载环境变量
-load_dotenv(project_root / ".env", override=True)
+print(os.getcwd())
+print(os.getenv("GOOGLE_API_KEY"))
 
 
 def test_toolkit_tools():
@@ -75,7 +79,7 @@ def test_toolkit_tools():
             try:
                 # 测试调用
                 print("📰 测试Reddit新闻获取...")
-                news = toolkit.get_reddit_stock_info.invoke(
+                news = toolkit.get_stock_fundamentals_unified.invoke(
                     {"ticker": "TSLA", "curr_date": "2025-09-12"}
                 )
                 print(f"Google新闻: {news}")

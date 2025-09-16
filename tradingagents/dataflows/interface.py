@@ -1340,7 +1340,7 @@ def get_fundamentals_finnhub(ticker, curr_date):
         if cached_key:
             cached_data = cache.load_fundamentals_data(cached_key)
             if cached_data:
-                logger.debug(f"💾 [DEBUG] 从缓存加载Finnhub基本面数据: {ticker}")
+                logger.info(f"💾 [DEBUG] 从缓存加载Finnhub基本面数据: {ticker}")
                 return cached_data
 
         # 获取Finnhub API密钥
@@ -1452,7 +1452,7 @@ def get_fundamentals_finnhub(ticker, curr_date):
         if report and len(report) > 100:  # 只有当报告有实际内容时才缓存
             cache.save_fundamentals_data(ticker, report, data_source="finnhub")
 
-        logger.debug(f"📊 [DEBUG] Finnhub基本面数据获取完成，报告长度: {len(report)}")
+        logger.info(f"📊 [DEBUG] Finnhub基本面数据获取完成，报告长度: {len(report)}")
         return report
 
     except ImportError:
@@ -1481,7 +1481,7 @@ def get_fundamentals_openai(ticker, curr_date):
         if cached_key:
             cached_data = cache.load_fundamentals_data(cached_key)
             if cached_data:
-                logger.debug(f"💾 [DEBUG] 从缓存加载OpenAI基本面数据: {ticker}")
+                logger.info(f"💾 [DEBUG] 从缓存加载OpenAI基本面数据: {ticker}")
                 return cached_data
 
         config = get_config()
@@ -1489,7 +1489,7 @@ def get_fundamentals_openai(ticker, curr_date):
         # 检查是否配置了OpenAI API Key（这是最关键的检查）
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            logger.debug(
+            logger.info(
                 f"📊 [DEBUG] 未配置OPENAI_API_KEY，跳过OpenAI API，直接使用Finnhub"
             )
             return get_fundamentals_finnhub(ticker, curr_date)
@@ -1507,7 +1507,7 @@ def get_fundamentals_openai(ticker, curr_date):
             )
             return get_fundamentals_finnhub(ticker, curr_date)
 
-        logger.debug(f"📊 [DEBUG] 尝试使用OpenAI获取 {ticker} 的基本面数据...")
+        logger.info(f"📊 [DEBUG] 尝试使用OpenAI获取 {ticker} 的基本面数据...")
 
         client = OpenAI(base_url=config["backend_url"])
 

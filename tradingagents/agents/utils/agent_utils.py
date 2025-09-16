@@ -801,7 +801,7 @@ class Toolkit:
         Returns:
             str: A formatted string containing the latest fundamental information about the company on the given date.
         """
-        logger.debug(
+        logger.info(
             f"📊 [DEBUG] get_fundamentals_openai 被调用: ticker={ticker}, date={curr_date}"
         )
 
@@ -1265,7 +1265,7 @@ class Toolkit:
 
             else:
                 # 美股：优先使用FINNHUB API数据源
-                logger.info(f"🇺🇸 [统一市场工具] 处理美股市场数据111111...")
+                logger.info(f"🇺🇸 [统一市场工具] 处理美股市场数据----->FINNHUB API")
 
                 try:
                     from tradingagents.dataflows.optimized_us_data import (
@@ -1273,7 +1273,7 @@ class Toolkit:
                     )
 
                     us_data = get_us_stock_data_cached(ticker, start_date, end_date)
-                    logger.info(f"🇺🇸 [统一市场工具] 美股市场数据: {us_data}")
+                    # logger.info(f"🇺🇸 [统一市场工具] 美股市场数据: {us_data}")
                     result_data.append(f"## 美股市场数据\n{us_data}")
                 except Exception as e:
                     result_data.append(f"## 美股市场数据\n获取失败: {e}")

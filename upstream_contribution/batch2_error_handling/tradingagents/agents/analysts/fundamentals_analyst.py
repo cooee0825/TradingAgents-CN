@@ -6,11 +6,13 @@ import json
 
 # 导入日志模块
 from tradingagents.utils.logging_manager import get_logger
-logger = get_logger('agents')
+
+logger = get_logger("agents")
 
 
 def create_fundamentals_analyst_react(llm, toolkit):
     """使用ReAct Agent模式的基本面分析师（适用于通义千问）"""
+
     def fundamentals_analyst_react_node(state):
         logger.debug(f"📊 [DEBUG] ===== ReAct基本面分析师节点开始 =====")
 
@@ -22,7 +24,8 @@ def create_fundamentals_analyst_react(llm, toolkit):
         # TODO: Add English comment
         def is_china_stock(ticker_code):
             import re
-            return re.match(r'^\d{6}$', str(ticker_code))
+
+            return re.match(r"^\d{6}$", str(ticker_code))
 
         is_china = is_china_stock(ticker)
         logger.debug(f"📊 [DEBUG] 股票类型检查: {ticker} -> 中国A股: {is_china}")
@@ -40,24 +43,31 @@ def create_fundamentals_analyst_react(llm, toolkit):
 
                     def _run(self, query: str = "") -> str:
                         try:
-                            logger.debug(f"📊 [DEBUG] ChinaStockDataTool调用，股票代码: {ticker}")
+                            logger.debug(
+                                f"📊 [DEBUG] ChinaStockDataTool调用，股票代码: {ticker}"
+                            )
                             # TODO: Add English comment
-                            from tradingagents.dataflows.optimized_china_data import get_china_stock_data_cached
+                            from tradingagents.dataflows.optimized_china_data import (
+                                get_china_stock_data_cached,
+                            )
+
                             return get_china_stock_data_cached(
                                 symbol=ticker,
-                                start_date='2025-05-28',
+                                start_date="2025-05-28",
                                 end_date=current_date,
-                                force_refresh=False
+                                force_refresh=False,
                             )
                         except Exception as e:
                             logger.error(f"❌ 优化A股数据获取失败: {e}")
                             # TODO: Add English comment
                             try:
-                                return toolkit.get_china_stock_data.invoke({
-                                    'stock_code': ticker,
-                                    'start_date': '2025-05-28',
-                                    'end_date': current_date
-                                })
+                                return toolkit.get_china_stock_data.invoke(
+                                    {
+                                        "stock_code": ticker,
+                                        "start_date": "2025-05-28",
+                                        "end_date": current_date,
+                                    }
+                                )
                             except Exception as e2:
                                 return f"获取股票数据失败: {str(e2)}"
 
@@ -67,21 +77,24 @@ def create_fundamentals_analyst_react(llm, toolkit):
 
                     def _run(self, query: str = "") -> str:
                         try:
-                            logger.debug(f"📊 [DEBUG] ChinaFundamentalsTool调用，股票代码: {ticker}")
+                            logger.debug(
+                                f"📊 [DEBUG] ChinaFundamentalsTool调用，股票代码: {ticker}"
+                            )
                             # TODO: Add English comment
-                            from tradingagents.dataflows.optimized_china_data import get_china_fundamentals_cached
+                            from tradingagents.dataflows.optimized_china_data import (
+                                get_china_fundamentals_cached,
+                            )
+
                             return get_china_fundamentals_cached(
-                                symbol=ticker,
-                                force_refresh=False
+                                symbol=ticker, force_refresh=False
                             )
                         except Exception as e:
                             logger.error(f"❌ 优化A股基本面数据获取失败: {e}")
                             # TODO: Add English comment
                             try:
-                                return toolkit.get_china_fundamentals.invoke({
-                                    'ticker': ticker,
-                                    'curr_date': current_date
-                                })
+                                return toolkit.get_china_fundamentals.invoke(
+                                    {"ticker": ticker, "curr_date": current_date}
+                                )
                             except Exception as e2:
                                 return f"获取基本面数据失败: {str(e2)}"
 
@@ -117,24 +130,31 @@ def create_fundamentals_analyst_react(llm, toolkit):
 
                     def _run(self, query: str = "") -> str:
                         try:
-                            logger.debug(f"📊 [DEBUG] USStockDataTool调用，股票代码: {ticker}")
+                            logger.debug(
+                                f"📊 [DEBUG] USStockDataTool调用，股票代码: {ticker}"
+                            )
                             # TODO: Add English comment
-                            from tradingagents.dataflows.optimized_us_data import get_us_stock_data_cached
+                            from tradingagents.dataflows.optimized_us_data import (
+                                get_us_stock_data_cached,
+                            )
+
                             return get_us_stock_data_cached(
                                 symbol=ticker,
-                                start_date='2025-05-28',
+                                start_date="2025-05-28",
                                 end_date=current_date,
-                                force_refresh=False
+                                force_refresh=False,
                             )
                         except Exception as e:
                             logger.error(f"❌ 优化美股数据获取失败: {e}")
                             # TODO: Add English comment
                             try:
-                                return toolkit.get_YFin_data_online.invoke({
-                                    'symbol': ticker,
-                                    'start_date': '2025-05-28',
-                                    'end_date': current_date
-                                })
+                                return toolkit.get_YFin_data_online.invoke(
+                                    {
+                                        "symbol": ticker,
+                                        "start_date": "2025-05-28",
+                                        "end_date": current_date,
+                                    }
+                                )
                             except Exception as e2:
                                 return f"获取股票数据失败: {str(e2)}"
 
@@ -144,11 +164,12 @@ def create_fundamentals_analyst_react(llm, toolkit):
 
                     def _run(self, query: str = "") -> str:
                         try:
-                            logger.debug(f"📊 [DEBUG] USFundamentalsTool调用，股票代码: {ticker}")
-                            return toolkit.get_fundamentals_openai.invoke({
-                                'ticker': ticker,
-                                'curr_date': current_date
-                            })
+                            logger.debug(
+                                f"📊 [DEBUG] USFundamentalsTool调用，股票代码: {ticker}"
+                            )
+                            return toolkit.get_fundamentals_openai.invoke(
+                                {"ticker": ticker, "curr_date": current_date}
+                            )
                         except Exception as e:
                             return f"获取基本面数据失败: {str(e)}"
 
@@ -158,12 +179,16 @@ def create_fundamentals_analyst_react(llm, toolkit):
 
                     def _run(self, query: str = "") -> str:
                         try:
-                            logger.debug(f"📊 [DEBUG] FinnhubNewsTool调用，股票代码: {ticker}")
-                            return toolkit.get_finnhub_news.invoke({
-                                'ticker': ticker,
-                                'start_date': '2025-05-28',
-                                'end_date': current_date
-                            })
+                            logger.debug(
+                                f"📊 [DEBUG] FinnhubNewsTool调用，股票代码: {ticker}"
+                            )
+                            return toolkit.get_finnhub_news.invoke(
+                                {
+                                    "ticker": ticker,
+                                    "start_date": "2025-05-28",
+                                    "end_date": current_date,
+                                }
+                            )
                         except Exception as e:
                             return f"获取新闻数据失败: {str(e)}"
 
@@ -202,26 +227,28 @@ def create_fundamentals_analyst_react(llm, toolkit):
                     handle_parsing_errors=True,
                     max_iterations=10,  # TODO: Add English comment
                     max_execution_time=180,  # TODO: Add English comment
-                    return_intermediate_steps=True  # TODO: Add English comment
+                    return_intermediate_steps=True,  # TODO: Add English comment
                 )
 
-
-
                 logger.debug(f"📊 [DEBUG] 执行ReAct Agent查询...")
-                result = agent_executor.invoke({'input': query})
+                result = agent_executor.invoke({"input": query})
 
-                report = result['output']
-                logger.info(f"📊 [基本面分析师] ReAct Agent完成，报告长度: {len(report)}")
+                report = result["output"]
+                logger.info(
+                    f"📊 [基本面分析师] ReAct Agent完成，报告长度: {len(report)}"
+                )
 
                 # TODO: Add English comment
                 if "Invalid Format" in report or "Missing 'Action:'" in report:
                     logger.error(f"⚠️ [DEBUG] 检测到格式错误，但Agent已处理")
-                    logger.debug(f"📊 [DEBUG] 中间步骤数量: {len(result.get('intermediate_steps', []))}")
+                    logger.debug(
+                        f"📊 [DEBUG] 中间步骤数量: {len(result.get('intermediate_steps', []))}"
+                    )
 
             except Exception as e:
                 logger.error(f"❌ [DEBUG] ReAct Agent失败: {str(e)}")
                 logger.error(f"📊 [DEBUG] 错误类型: {type(e).__name__}")
-                if hasattr(e, 'args') and e.args:
+                if hasattr(e, "args") and e.args:
                     logger.error(f"📊 [DEBUG] 错误详情: {e.args}")
                 report = f"ReAct Agent基本面分析失败: {str(e)}"
         else:
@@ -247,8 +274,12 @@ def create_fundamentals_analyst(llm, toolkit):
         company_name = state["company_of_interest"]
 
         logger.debug(f"📊 [DEBUG] 输入参数: ticker={ticker}, date={current_date}")
-        logger.debug(f"📊 [DEBUG] 当前状态中的消息数量: {len(state.get('messages', []))}")
-        logger.debug(f"📊 [DEBUG] 现有基本面报告: {state.get('fundamentals_report', 'None')[:100]}...")
+        logger.debug(
+            f"📊 [DEBUG] 当前状态中的消息数量: {len(state.get('messages', []))}"
+        )
+        logger.debug(
+            f"📊 [DEBUG] 现有基本面报告: {state.get('fundamentals_report', 'None')[:100]}..."
+        )
 
         # TODO: Add English comment
         def is_china_stock(ticker_code):
@@ -256,7 +287,7 @@ def create_fundamentals_analyst(llm, toolkit):
             import re
 
             # A股代码格式：6位数字
-            return re.match(r'^\d{6}$', str(ticker_code))
+            return re.match(r"^\d{6}$", str(ticker_code))
 
         logger.info(f"📊 [基本面分析师] 正在分析股票: {ticker}")
 
@@ -264,22 +295,23 @@ def create_fundamentals_analyst(llm, toolkit):
         is_china = is_china_stock(ticker)
         logger.debug(f"📊 [DEBUG] 股票类型检查: {ticker} -> 中国A股: {is_china}")
 
-        logger.debug(f"📊 [DEBUG] 工具配置检查: online_tools={toolkit.config['online_tools']}")
+        logger.debug(
+            f"📊 [DEBUG] 工具配置检查: online_tools={toolkit.config['online_tools']}"
+        )
 
         if toolkit.config["online_tools"]:
             if is_china:
                 # TODO: Add English comment
-                logger.info(f"📊 [基本面分析师] 检测到A股代码，使用中国股票数据源进行基本面分析")
-                tools = [
-                    toolkit.get_china_stock_data,
-                    toolkit.get_china_fundamentals
-                ]
+                logger.info(
+                    f"📊 [基本面分析师] 检测到A股代码，使用中国股票数据源进行基本面分析"
+                )
+                tools = [toolkit.get_china_stock_data, toolkit.get_china_fundamentals]
                 logger.debug(f"📊 [DEBUG] 选择的工具: {[tool.name for tool in tools]}")
             else:
                 # TODO: Add English comment
                 logger.info(f"📊 [基本面分析师] 检测到非A股代码，使用OpenAI数据源")
                 tools = [toolkit.get_fundamentals_openai]
-                logger.debug(f"📊 [DEBUG] 选择的工具: {[tool.name for tool in tools]}")
+                # logger.debug(f"📊 [DEBUG] 选择的工具: {[tool.name for tool in tools]}")
         else:
             tools = [
                 toolkit.get_finnhub_company_insider_sentiment,
@@ -388,8 +420,12 @@ def create_fundamentals_analyst(llm, toolkit):
 
         logger.debug(f"📊 [DEBUG] LLM调用完成")
         logger.debug(f"📊 [DEBUG] 结果类型: {type(result)}")
-        logger.debug(f"📊 [DEBUG] 工具调用数量: {len(result.tool_calls) if hasattr(result, 'tool_calls') else 0}")
-        logger.debug(f"📊 [DEBUG] 内容长度: {len(result.content) if hasattr(result, 'content') else 0}")
+        logger.debug(
+            f"📊 [DEBUG] 工具调用数量: {len(result.tool_calls) if hasattr(result, 'tool_calls') else 0}"
+        )
+        logger.debug(
+            f"📊 [DEBUG] 内容长度: {len(result.content) if hasattr(result, 'content') else 0}"
+        )
 
         # TODO: Add English comment
         if len(result.tool_calls) == 0:
@@ -400,20 +436,25 @@ def create_fundamentals_analyst(llm, toolkit):
                 try:
                     # TODO: Add English comment
                     logger.debug(f"📊 [DEBUG] 手动调用 get_china_stock_data...")
-                    stock_data_result = toolkit.get_china_stock_data.invoke({
-                        'stock_code': ticker,
-                        'start_date': '2025-05-28',
-                        'end_date': current_date
-                    })
-                    logger.debug(f"📊 [DEBUG] get_china_stock_data 结果长度: {len(stock_data_result)}")
+                    stock_data_result = toolkit.get_china_stock_data.invoke(
+                        {
+                            "stock_code": ticker,
+                            "start_date": "2025-05-28",
+                            "end_date": current_date,
+                        }
+                    )
+                    logger.debug(
+                        f"📊 [DEBUG] get_china_stock_data 结果长度: {len(stock_data_result)}"
+                    )
 
                     # TODO: Add English comment
                     logger.debug(f"📊 [DEBUG] 手动调用 get_china_fundamentals...")
-                    fundamentals_result = toolkit.get_china_fundamentals.invoke({
-                        'ticker': ticker,
-                        'curr_date': current_date
-                    })
-                    logger.debug(f"📊 [DEBUG] get_china_fundamentals 结果长度: {len(fundamentals_result)}")
+                    fundamentals_result = toolkit.get_china_fundamentals.invoke(
+                        {"ticker": ticker, "curr_date": current_date}
+                    )
+                    logger.debug(
+                        f"📊 [DEBUG] get_china_fundamentals 结果长度: {len(fundamentals_result)}"
+                    )
 
                     # TODO: Add English comment
                     report = f"""# 基本面分析报告
@@ -427,7 +468,9 @@ def create_fundamentals_analyst(llm, toolkit):
 ## 分析总结
 基于通达信数据源的真实数据分析完成. 以上信息来自官方数据源, 确保准确性和时效性.
 """
-                    logger.info(f"📊 [基本面分析师] 手动工具调用完成，生成报告长度: {len(report)}")
+                    logger.info(
+                        f"📊 [基本面分析师] 手动工具调用完成，生成报告长度: {len(report)}"
+                    )
 
                 except Exception as e:
                     logger.error(f"❌ [DEBUG] 手动工具调用失败: {str(e)}")
@@ -439,9 +482,11 @@ def create_fundamentals_analyst(llm, toolkit):
         else:
             # TODO: Add English comment
             report = state.get("fundamentals_report", "")  # TODO: Add English comment
-            logger.info(f"📊 [基本面分析师] 工具调用: {[call.get('name', 'unknown') for call in result.tool_calls]}")
+            logger.info(
+                f"📊 [基本面分析师] 工具调用: {[call.get('name', 'unknown') for call in result.tool_calls]}"
+            )
             for i, call in enumerate(result.tool_calls):
-                logger.debug(f"📊 [DEBUG] 工具调用 {i+1}: {call}")
+                logger.debug(f"📊 [DEBUG] 工具调用 {i + 1}: {call}")
 
         logger.debug(f"📊 [DEBUG] 返回状态: fundamentals_report长度={len(report)}")
         logger.debug(f"📊 [DEBUG] ===== 基本面分析师节点结束 =====")
