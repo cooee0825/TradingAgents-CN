@@ -5,15 +5,15 @@
 
 import os
 import sys
-from pathlib import Path
-from dotenv import load_dotenv
+
 
 # 添加项目根目录到Python路径
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+from pathlib import Path
 
-# 加载环境变量
-load_dotenv(project_root / ".env", override=True)
+
+# 添加项目根目录到Python路径
+project_root = Path(__file__).parent.parent  # 向上一级到达项目根目录
+sys.path.insert(0, str(project_root))
 
 
 def test_news_analyst_with_google():
@@ -35,7 +35,10 @@ def test_news_analyst_with_google():
 
         # 创建LLM和工具包
         llm = ChatGoogleOpenAI(
-            model="gemini-2.5-flash-lite-preview-06-17", temperature=0.1
+            model="gemini-2.5-pro",
+            temperature=0.1,
+            max_tokens=16000,
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
         )
         toolkit = Toolkit(config=config)
 
@@ -53,7 +56,7 @@ def test_news_analyst_with_google():
         test_state = {
             "messages": [HumanMessage(content="分析AAPL的新闻情况")],
             "company_of_interest": "AAPL",
-            "trade_date": "2025-09-11",
+            "trade_date": "2025-09-15",
         }
 
         print("📰 开始新闻分析...")
@@ -173,10 +176,10 @@ def main():
     results = {}
 
     print("\n" + "=" * 70)
-    # results["新闻分析师+Google"] = test_news_analyst_with_google()
+    results["新闻分析师+Google"] = test_news_analyst_with_google()
 
     print("\n" + "=" * 70)
-    results["社交媒体分析师+Reddit"] = test_social_analyst_with_reddit()
+    # results["社交媒体分析师+Reddit"] = test_social_analyst_with_reddit()
 
     # 总结结果
     print(f"\n📊 测试结果总结:")
