@@ -106,7 +106,7 @@ def test_social_analyst_with_reddit():
         config["llm_provider"] = "dashscope"
 
         # 创建LLM和工具包
-        llm = ChatGoogleOpenAI(model="gemini-2.5-pro", temperature=0.1)
+        llm = ChatGoogleOpenAI(model="gemini-2.5-pro", temperature=0.1, max_tokens=8000)
         toolkit = Toolkit(config=config)
         print(toolkit.get_reddit_stock_info)
 
@@ -176,10 +176,10 @@ def main():
     results = {}
 
     print("\n" + "=" * 70)
-    results["新闻分析师+Google"] = test_news_analyst_with_google()
+    # results["新闻分析师+Google"] = test_news_analyst_with_google()
 
     print("\n" + "=" * 70)
-    # results["社交媒体分析师+Reddit"] = test_social_analyst_with_reddit()
+    results["社交媒体分析师+Reddit"] = test_social_analyst_with_reddit()
 
     # 总结结果
     print(f"\n📊 测试结果总结:")

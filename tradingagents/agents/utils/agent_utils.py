@@ -21,6 +21,8 @@ from tradingagents.utils.tool_logging import log_tool_call, log_analysis_step
 # 导入日志模块
 from tradingagents.utils.logging_manager import get_logger
 
+from tradingagents.config.database_manager import get_database_manager
+
 logger = get_logger("agents")
 
 
@@ -127,16 +129,31 @@ class Toolkit:
         print(
             f"📊 [DEBUG] get_reddit_stock_info 被调用: ticker={ticker}, date={curr_date}"
         )
-        result = Toolkit.download_reddit_company_data.invoke(
-            {
-                "ticker": ticker,
-                "category_name": ticker,
-                "limit_per_subreddit": 100,
-                "category_type": "hot",
-                "time_filter": "week",
-                "force_refresh": True,
-            }
+        result = (
+            get_database_manager()
+            .get_redis_client()
+            .get(f"reddit_stock_info_{ticker}_{curr_date}")
         )
+        if result is None:
+            result = Toolkit.download_reddit_company_data.invoke(
+                {
+                    "ticker": ticker,
+                    "category_name": ticker,
+                    "limit_per_subreddit": 100,
+                    "category_type": "hot",
+                    "time_filter": "week",
+                    "force_refresh": True,
+                }
+            )
+            get_database_manager().get_redis_client().set(
+                f"reddit_stock_info_{ticker}_{curr_date}", result
+            )
+            get_database_manager().get_redis_client().expire(
+                f"reddit_stock_info_{ticker}_{curr_date}", 60 * 60 * 24
+            )
+        else:
+            logger.info(f"📊 [DEBUG] 从Redis中获取数据: {ticker}, {curr_date}")
+            result = result.decode("utf-8")
 
         stock_news_results = interface.get_reddit_company_news(ticker, curr_date, 7, 20)
         print(f"stock_news_results: {len(stock_news_results)}")

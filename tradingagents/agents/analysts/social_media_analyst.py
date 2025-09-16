@@ -104,11 +104,10 @@ def create_social_media_analyst(llm, toolkit):
 
         if toolkit.config["online_tools"]:
             tools = [toolkit.get_reddit_stock_info]
-            tools = []
         else:
             # 使用美股社交媒体数据源，主要是Reddit
             tools = [
-                # toolkit.get_reddit_stock_info,
+                toolkit.get_reddit_stock_info,
             ]
 
         system_message = """您是一位专业的美股市场社交媒体和投资情绪分析师，负责分析美股投资者对特定股票的讨论和情绪变化。
@@ -164,7 +163,7 @@ def create_social_media_analyst(llm, toolkit):
                     " 将从您停下的地方继续帮助。执行您能做的以取得进展。"
                     " 如果您或任何其他助手有最终交易提案：**买入/持有/卖出**或可交付成果，"
                     " 请在您的回应前加上最终交易提案：**买入/持有/卖出**，以便团队知道停止。"
-                    " 您可以访问以下工具：{tool_names}。\n{system_message}"
+                    " 您必须调用以下工具：{tool_names}。\n{system_message}"
                     "供您参考，当前日期是{current_date}。我们要分析的当前公司是{ticker}。请用中文撰写所有分析内容。",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
@@ -186,9 +185,6 @@ def create_social_media_analyst(llm, toolkit):
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(ticker=ticker)
 
-        # print(prompt)
-        # print(tools)
-        # print(prompt)
         chain = prompt | llm.bind_tools(tools)
 
         result = chain.invoke(state["messages"])
@@ -209,7 +205,7 @@ def create_social_media_analyst(llm, toolkit):
             report, messages = GoogleToolCallHandler.handle_google_tool_calls(
                 result=result,
                 llm=llm,
-                tools=[],
+                tools=tools,
                 state=state,
                 analysis_prompt_template=analysis_prompt_template,
                 analyst_name="社交媒体分析师",
