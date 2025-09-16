@@ -100,7 +100,7 @@ def create_fundamentals_analyst(llm, toolkit):
 
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
-        start_date = "2025-05-28"
+        start_date = "2025-01-01"
 
         logger.debug(f"📊 [DEBUG] 输入参数: ticker={ticker}, date={current_date}")
         logger.debug(
@@ -167,7 +167,7 @@ def create_fundamentals_analyst(llm, toolkit):
         else:
             # 离线模式：优先使用FinnHub数据，SimFin作为补充
             tools = [
-                toolkit.get_fundamentals_openai,  # 使用现有的OpenAI基本面数据工具
+                toolkit.get_stock_fundamentals_unified,  # 使用现有的OpenAI基本面数据工具
                 # toolkit.get_finnhub_company_insider_sentiment,
                 # toolkit.get_finnhub_company_insider_transactions,
                 # toolkit.get_simfin_balance_sheet,
